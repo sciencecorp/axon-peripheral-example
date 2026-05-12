@@ -11,3 +11,7 @@ compile_commands.json
 
 # synapsectl stores SFTP credentials here on `--save-password`. Never commit.
 .scienv
+
+# Recordings captured during local testing.
+*.h5
+test.h5/

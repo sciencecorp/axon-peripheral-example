@@ -91,18 +91,12 @@ IntanRhd2132Peripheral::IntanRhd2132Peripheral(uint32_t periph_id, uint32_t peri
                                                zmq::context_t& ctx,
                                                const std::string& axon_tx_endpoint,
                                                const std::string& axon_rx_endpoint)
-    : RecordPeripheral(periph_id, MAX_SAMPLE_RATE, MAX_BIT_WIDTH, MAX_GAIN, CHANNEL_COUNT),
-      context_(ctx),
-      axon_tx_sock_(axon::make_tx_socket(ctx, axon_tx_endpoint)),
-      axon_rx_sock_(axon::make_rx_socket(ctx)),
-      peripheral_addr_(peripheral_addr),
-      axon_tx_endpoint_(axon_tx_endpoint),
-      axon_rx_endpoint_(axon_rx_endpoint) {}
+    : scifi::plugin::RecordPlugin(periph_id, MAX_SAMPLE_RATE, MAX_BIT_WIDTH, MAX_GAIN,
+                                  CHANNEL_COUNT, peripheral_addr, ctx, axon_tx_endpoint,
+                                  axon_rx_endpoint) {}
 
-IntanRhd2132Peripheral::~IntanRhd2132Peripheral() {
-  axon_tx_sock_.close();
-  axon_rx_sock_.close();
-}
+// No custom destructor — RecordPlugin owns the sockets and zmq::socket_t closes
+// itself on destruction.
 
 synapse::Peripheral IntanRhd2132Peripheral::to_proto() const {
   synapse::Peripheral p;
@@ -144,12 +138,10 @@ std::vector<axon::MyelinFrame> IntanRhd2132Peripheral::read_frames(uint32_t num_
   int recv_fail_count = 0;
   constexpr int recv_fail_max = 3;
   uint32_t frames_filled = 0;
-  const size_t expected_msg_size = sizeof(axon::RxMsgHeader) + channels_enabled_ * sizeof(uint32_t);
 
   while (frames_filled < num_frames && read_enable_) {
-    zmq::message_t message;
-    const auto ret = axon_rx_sock_.recv(message);
-    if (!ret) {
+    auto pkt = receive_packet();
+    if (!pkt) {
       recv_fail_count++;
       if (recv_fail_count > recv_fail_max) {
         spdlog::error("IntanRhd2132: Failed to receive from Axon RX socket. Exiting read loop.");
@@ -159,45 +151,43 @@ std::vector<axon::MyelinFrame> IntanRhd2132Peripheral::read_frames(uint32_t num_
     }
     recv_fail_count = 0;
 
-    // Defensive size check before dereferencing.
-    if (message.size() < expected_msg_size) {
-      spdlog::warn("IntanRhd2132: Undersized message ({} bytes, expected {})", message.size(),
-                   expected_msg_size);
+    // Defensive size check on payload word count.
+    if (pkt->payload_size() < channels_enabled_) {
+      spdlog::warn("IntanRhd2132: Undersized message ({} payload words, expected {})",
+                   pkt->payload_size(), channels_enabled_);
       continue;
     }
 
-    axon::RxMsgHeader* header = static_cast<axon::RxMsgHeader*>(message.data());
-    if (header->type != SPI_LOOP_RESPONSE) {
+    if (pkt->type() != SPI_LOOP_RESPONSE) {
       spdlog::warn("IntanRhd2132: Unexpected message type 0x{:04X}, expected SPI_LOOP_RESPONSE",
-                   header->type);
+                   pkt->type());
       continue;
     }
 
     // Detect drops via seq_num gap. With one packet per iteration the gateware emits a
     // single seq_num per frame, so consecutive frames must have consecutive seq_nums.
-    if (first_frame_received_ && header->seq_num != last_seq_num_ + 1) {
-      uint64_t lost = header->seq_num - last_seq_num_ - 1;
+    if (first_frame_received_ && pkt->seq_num() != last_seq_num_ + 1) {
+      uint64_t lost = pkt->seq_num() - last_seq_num_ - 1;
       dropped_packets_ += lost;
       if (dropped_packets_ <= 10 || dropped_packets_ % 1000 == 0) {
         spdlog::warn("IntanRhd2132: Dropped {} frames total ({} this gap)", dropped_packets_, lost);
       }
     }
-    last_seq_num_ = header->seq_num;
+    last_seq_num_ = pkt->seq_num();
     first_frame_received_ = true;
 
     // Extract L 16-bit samples from the payload. Each payload word is 0x0000_RRRR.
-    uint32_t* payload = static_cast<uint32_t*>(message.data()) + (sizeof(axon::RxMsgHeader) >> 2);
     for (uint32_t i = 0; i < channels_enabled_; i++) {
-      frame_buffer_[i] = static_cast<uint16_t>(payload[i] & 0xFFFF);
+      frame_buffer_[i] = static_cast<uint16_t>((*pkt)[i] & 0xFFFF);
     }
 
     axon::MyelinFrame& frame = frames[frames_filled];
     frame.set_sample_rate(sample_rate);
 
-    shared_time_source_->update(header->seq_num, sample_rate);
+    shared_time_source_->update(pkt->seq_num(), sample_rate);
     frame.set_timestamp(shared_time_source_->timestamp_ns());
     frame.set_unix_timestamp_ns(scifi::get_steady_clock_now().count());
-    frame.set_sequence_number(header->seq_num);
+    frame.set_sequence_number(pkt->seq_num());
 
     std::span<uint16_t> sample_data(frame_buffer_, channels_enabled_);
     frame.set_frame_data(sample_data);
@@ -237,7 +227,7 @@ scifi::Status IntanRhd2132Peripheral::start_recording(uint32_t sample_rate, uint
   }
 
   // Reset the SPI controller
-  scifi::Status ret = axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SPI_RESET, {});
+  scifi::Status ret = send_packet(SPI_RESET, {});
   if (ret != scifi::Status::OK) {
     spdlog::error("IntanRhd2132: Failed to reset SPI controller.");
     return scifi::Status::FAILURE;
@@ -301,7 +291,7 @@ scifi::Status IntanRhd2132Peripheral::start_recording(uint32_t sample_rate, uint
 
   // Set sample period on the gateware (no SPI_RESPONSE generated by this control message)
   uint32_t period = registers_.get_sample_period();
-  ret = axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SET_SAMPLE_PERIOD, {period});
+  ret = send_packet(SET_SAMPLE_PERIOD, {period});
   if (ret != scifi::Status::OK) {
     spdlog::error("IntanRhd2132: Failed to set sample period.");
     return scifi::Status::FAILURE;
@@ -316,23 +306,20 @@ scifi::Status IntanRhd2132Peripheral::start_recording(uint32_t sample_rate, uint
 
   // Subscribe + connect RX socket BEFORE starting the loop. This avoids the race where the
   // gateware emits responses before our subscription is active. The subscription lives until
-  // stop_recording resets the unique_ptr, at which point ~AxonRxSubscription disconnects +
+  // stop_recording resets the optional, at which point ~AxonRxSubscription disconnects +
   // unsubscribes.
-  loop_subscription_ = std::make_unique<axon::AxonRxSubscription>(
-      axon_rx_sock_, axon_rx_endpoint_, peripheral_addr_, SPI_LOOP_RESPONSE,
-      ZMQ_RECV_TIMEOUT_MS);
+  loop_subscription_ = subscribe(SPI_LOOP_RESPONSE, ZMQ_RECV_TIMEOUT_MS);
   if (!*loop_subscription_) {
     loop_subscription_.reset();
     return scifi::Status::CONNECTION_FAILED;
   }
 
-  // Drain any stale messages that may have arrived during subscription setup.
-  int drained = clear_rx_socket_();
+  // Drain any stale messages that may have arrived during subscription setup. drain_rx
+  // restores the previous rcvtimeo for us, so no manual reset needed.
+  int drained = drain_rx();
   if (drained > 0) {
     spdlog::debug("IntanRhd2132: Drained {} stale messages before starting loop", drained);
   }
-  // Restore the read timeout that clear_rx_socket_ shortened.
-  axon_rx_sock_.set(zmq::sockopt::rcvtimeo, ZMQ_RECV_TIMEOUT_MS);
 
   read_enable_ = true;
 
@@ -340,7 +327,7 @@ scifi::Status IntanRhd2132Peripheral::start_recording(uint32_t sample_rate, uint
   // (after the initial 2 garbage samples) to a known channel position via seq_num arithmetic.
   std::vector<uint32_t> loop_cmds = build_acquisition_loop_();
   spdlog::info("IntanRhd2132: Starting SPI_LOOP with {} commands", loop_cmds.size());
-  ret = axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SPI_LOOP, loop_cmds);
+  ret = send_packet(SPI_LOOP, loop_cmds);
   if (ret != scifi::Status::OK) {
     spdlog::error("IntanRhd2132: Failed to start acquisition loop.");
     read_enable_ = false;
@@ -357,12 +344,12 @@ scifi::Status IntanRhd2132Peripheral::stop_recording() {
   read_enable_ = false;
 
   // Stop the acquisition loop
-  scifi::Status ret = axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SPI_LOOP_STOP, {});
+  scifi::Status ret = send_packet(SPI_LOOP_STOP, {});
   if (ret != scifi::Status::OK) {
     spdlog::warn("IntanRhd2132: Failed to stop SPI loop.");
   }
 
-  int packets_cleared = clear_rx_socket_();
+  int packets_cleared = drain_rx();
   spdlog::debug("IntanRhd2132: Cleared {} packets from RX socket", packets_cleared);
 
   // Trigger ~AxonRxSubscription: disconnect from RX endpoint + unsubscribe from
@@ -633,7 +620,7 @@ scifi::Status IntanRhd2132Peripheral::get_impedance(uint32_t electrode_id, float
   // ADC uncalibrated, etc. Mirrors start_recording's setup so the gateware ends up in the
   // same state regardless of which path got us here.
   spdlog::debug("IntanRhd2132: Resetting and initializing chip for impedance measurement");
-  scifi::Status ret = axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SPI_RESET, {});
+  scifi::Status ret = send_packet(SPI_RESET, {});
   if (ret != scifi::Status::OK) {
     spdlog::error("IntanRhd2132: Failed to reset SPI controller before impedance");
     restore_registers();
@@ -656,7 +643,7 @@ scifi::Status IntanRhd2132Peripheral::get_impedance(uint32_t electrode_id, float
     spdlog::warn("IntanRhd2132: ADC calibration failed before impedance; continuing");
   }
 
-  ret = axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SET_COMMAND_PERIOD,
+  ret = send_packet(SET_COMMAND_PERIOD,
                                {command_period_clkmc});
   if (ret != scifi::Status::OK) {
     spdlog::error("IntanRhd2132: Failed to send SET_COMMAND_PERIOD for impedance");
@@ -671,24 +658,21 @@ scifi::Status IntanRhd2132Peripheral::get_impedance(uint32_t electrode_id, float
 
   // Subscribe + connect RX socket BEFORE starting the loop. RAII guard cleans up on
   // every return path below.
-  axon::AxonRxSubscription sub(axon_rx_sock_, axon_rx_endpoint_,
-                               peripheral_addr_, SPI_LOOP_RESPONSE,
-                               ZMQ_RECV_TIMEOUT_MS);
+  auto sub = subscribe(SPI_LOOP_RESPONSE, ZMQ_RECV_TIMEOUT_MS);
   if (!sub) {
     restore_registers();
     return scifi::Status::CONNECTION_FAILED;
   }
-  clear_rx_socket_();
-  axon_rx_sock_.set(zmq::sockopt::rcvtimeo, ZMQ_RECV_TIMEOUT_MS);
+  drain_rx();
 
   spdlog::info(
       "IntanRhd2132: Starting impedance SPI_TIMED_LOOP with {} commands, "
       "command_period_clkmc={}",
       loop_seq.size(), command_period_clkmc);
-  ret = axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SPI_TIMED_LOOP, loop_seq);
+  ret = send_packet(SPI_TIMED_LOOP, loop_seq);
   if (ret != scifi::Status::OK) {
     spdlog::error("IntanRhd2132: Failed to send SPI_TIMED_LOOP for impedance");
-    axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SPI_LOOP_STOP, {});
+    send_packet(SPI_LOOP_STOP, {});
     restore_registers();
     return ret;
   }
@@ -698,7 +682,7 @@ scifi::Status IntanRhd2132Peripheral::get_impedance(uint32_t electrode_id, float
       capture_impedance_samples_(loop_len, convert_payload_indices, total_iterations, samples);
 
   // Stop the loop. RX socket teardown happens in ~sub when this function returns.
-  (void)axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SPI_LOOP_STOP, {});
+  (void)send_packet(SPI_LOOP_STOP, {});
 
   restore_registers();
 
@@ -784,7 +768,6 @@ scifi::Status IntanRhd2132Peripheral::get_impedance(uint32_t electrode_id, float
 scifi::Status IntanRhd2132Peripheral::capture_impedance_samples_(
     uint32_t loop_len_words, const std::vector<uint32_t>& convert_payload_indices,
     uint32_t num_iterations, std::vector<double>& samples) {
-  const size_t expected_msg_size = sizeof(axon::RxMsgHeader) + loop_len_words * sizeof(uint32_t);
   samples.clear();
   if (convert_payload_indices.empty()) {
     spdlog::error("IntanRhd2132: Invalid impedance capture layout with no CONVERT samples");
@@ -804,9 +787,8 @@ scifi::Status IntanRhd2132Peripheral::capture_impedance_samples_(
   constexpr int recv_fail_max = 10;
 
   while (iters_received < num_iterations) {
-    zmq::message_t message;
-    auto ret = axon_rx_sock_.recv(message);
-    if (!ret) {
+    auto pkt = receive_packet();
+    if (!pkt) {
       recv_fail_count++;
       if (recv_fail_count > recv_fail_max) {
         spdlog::error("IntanRhd2132: Impedance capture timeout after {} iterations",
@@ -817,29 +799,21 @@ scifi::Status IntanRhd2132Peripheral::capture_impedance_samples_(
     }
     recv_fail_count = 0;
 
-    if (message.size() < sizeof(axon::RxMsgHeader)) {
-      spdlog::warn("IntanRhd2132: Impedance message too small for header: {} bytes",
-                   message.size());
+    spdlog::debug("IntanRhd2132: Impedance rx: type=0x{:04x} src=0x{:04x} seq={} payload_words={}",
+                  pkt->type(), pkt->src_addr(), pkt->seq_num(), pkt->payload_size());
+
+    if (pkt->payload_size() < loop_len_words) {
+      spdlog::warn("IntanRhd2132: Impedance message too small: {} payload words (expected {})",
+                   pkt->payload_size(), loop_len_words);
+      continue;
+    }
+    if (pkt->type() != SPI_LOOP_RESPONSE) {
       continue;
     }
 
-    auto* header = static_cast<axon::RxMsgHeader*>(message.data());
-    spdlog::debug("IntanRhd2132: Impedance rx: size={} type=0x{:04x} src=0x{:04x} seq={}",
-                  message.size(), header->type, header->src_addr, header->seq_num);
-
-    if (message.size() < expected_msg_size) {
-      spdlog::warn("IntanRhd2132: Impedance message too small: {} bytes (expected {})",
-                   message.size(), expected_msg_size);
-      continue;
-    }
-    if (header->type != SPI_LOOP_RESPONSE) {
-      continue;
-    }
-
-    uint32_t* payload = static_cast<uint32_t*>(message.data()) + (sizeof(axon::RxMsgHeader) >> 2);
     // Treat the 16-bit value as signed; get_impedance enables twos-complement output.
     for (uint32_t payload_idx : convert_payload_indices) {
-      int16_t s = static_cast<int16_t>(payload[payload_idx] & 0xFFFF);
+      int16_t s = static_cast<int16_t>((*pkt)[payload_idx] & 0xFFFF);
       samples.push_back(static_cast<double>(s));
     }
     iters_received++;
@@ -886,7 +860,7 @@ scifi::Status IntanRhd2132Peripheral::push_registers_() {
   spdlog::debug("IntanRhd2132: Pushing all registers to hardware");
   std::vector<uint32_t> write_cmds = registers_.build_write_commands();
   for (const auto& cmd : write_cmds) {
-    scifi::Status ret = axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SPI_MSG, {cmd});
+    scifi::Status ret = send_packet(SPI_MSG, {cmd});
     if (ret != scifi::Status::OK) {
       spdlog::error("IntanRhd2132: Failed to push register command 0x{:04X}", cmd);
       return ret;
@@ -902,9 +876,7 @@ scifi::Status IntanRhd2132Peripheral::pull_registers_(bool verbose) {
     return scifi::Status::INVALID_STATE;
   }
 
-  axon::AxonRxSubscription sub(axon_rx_sock_, axon_rx_endpoint_,
-                               peripheral_addr_, SPI_RESPONSE,
-                               SPI_RESPONSE_TIMEOUT_MS);
+  auto sub = subscribe(SPI_RESPONSE, SPI_RESPONSE_TIMEOUT_MS);
   if (!sub) {
     return scifi::Status::CONNECTION_FAILED;
   }
@@ -918,36 +890,33 @@ scifi::Status IntanRhd2132Peripheral::pull_registers_(bool verbose) {
 
     while (attempts < max_retry && !success) {
       scifi::Status send_ret =
-          axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SPI_MSG, {read_cmds[reg_idx]});
+          send_packet(SPI_MSG, {read_cmds[reg_idx]});
       if (send_ret != scifi::Status::OK) {
         spdlog::error("IntanRhd2132: Failed to send read command for register {}", reg_idx);
         attempts++;
         continue;
       }
 
-      zmq::message_t rx_msg;
-      auto recv_ret = axon_rx_sock_.recv(rx_msg);
-      if (!recv_ret) {
+      auto pkt = receive_packet();
+      if (!pkt) {
         spdlog::warn("IntanRhd2132: Timeout reading register {}", reg_idx);
         attempts++;
         continue;
       }
 
-      if (rx_msg.size() < sizeof(axon::RxMsgHeader) + sizeof(uint32_t)) {
-        spdlog::warn("IntanRhd2132: Unexpected response size {} for register read", rx_msg.size());
+      if (pkt->payload_size() < 1) {
+        spdlog::warn("IntanRhd2132: Unexpected response size for register read");
         attempts++;
         continue;
       }
 
-      axon::RxMsgHeader* hdr = static_cast<axon::RxMsgHeader*>(rx_msg.data());
-      if (hdr->type != SPI_RESPONSE) {
-        spdlog::warn("IntanRhd2132: Unexpected response type 0x{:04X}", hdr->type);
+      if (pkt->type() != SPI_RESPONSE) {
+        spdlog::warn("IntanRhd2132: Unexpected response type 0x{:04X}", pkt->type());
         attempts++;
         continue;
       }
 
-      uint32_t* payload = static_cast<uint32_t*>(rx_msg.data()) + (sizeof(axon::RxMsgHeader) >> 2);
-      uint8_t rxd_val = static_cast<uint8_t>(*payload & 0xFF);
+      uint8_t rxd_val = static_cast<uint8_t>((*pkt)[0] & 0xFF);
 
       if (verbose) {
         uint8_t expected = REG_DEFAULTS[reg_idx];
@@ -971,9 +940,7 @@ scifi::Status IntanRhd2132Peripheral::pull_registers_(bool verbose) {
 
 scifi::Status IntanRhd2132Peripheral::verify_chip_identity_() {
   // Read ROM registers 40-44 (should spell "INTAN") and register 63 (chip ID)
-  axon::AxonRxSubscription sub(axon_rx_sock_, axon_rx_endpoint_,
-                               peripheral_addr_, SPI_RESPONSE,
-                               SPI_RESPONSE_TIMEOUT_MS);
+  auto sub = subscribe(SPI_RESPONSE, SPI_RESPONSE_TIMEOUT_MS);
   if (!sub) {
     return scifi::Status::CONNECTION_FAILED;
   }
@@ -985,29 +952,25 @@ scifi::Status IntanRhd2132Peripheral::verify_chip_identity_() {
 
   for (size_t i = 0; i < sizeof(rom_regs); i++) {
     uint32_t cmd = rhd_read(rom_regs[i]);
-    scifi::Status send_ret =
-        axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SPI_MSG, {cmd});
+    scifi::Status send_ret = send_packet(SPI_MSG, {cmd});
     if (send_ret != scifi::Status::OK) {
       identity_ok = false;
       continue;
     }
 
-    zmq::message_t rx_msg;
-    auto recv_ret = axon_rx_sock_.recv(rx_msg);
-    if (!recv_ret || rx_msg.size() < sizeof(axon::RxMsgHeader) + sizeof(uint32_t)) {
+    auto pkt = receive_packet();
+    if (!pkt || pkt->payload_size() < 1) {
       spdlog::warn("IntanRhd2132: No response for ROM register {}", rom_regs[i]);
       identity_ok = false;
       continue;
     }
 
-    axon::RxMsgHeader* hdr = static_cast<axon::RxMsgHeader*>(rx_msg.data());
-    if (hdr->type != SPI_RESPONSE) {
+    if (pkt->type() != SPI_RESPONSE) {
       identity_ok = false;
       continue;
     }
 
-    uint32_t* payload = static_cast<uint32_t*>(rx_msg.data()) + (sizeof(axon::RxMsgHeader) >> 2);
-    uint8_t val = static_cast<uint8_t>(*payload & 0xFF);
+    uint8_t val = static_cast<uint8_t>((*pkt)[0] & 0xFF);
     if (val != expected[i]) {
       spdlog::warn("IntanRhd2132: ROM register {} = 0x{:02X}, expected 0x{:02X}", rom_regs[i], val,
                    expected[i]);
@@ -1038,7 +1001,7 @@ scifi::Status IntanRhd2132Peripheral::calibrate_adc_() {
     calib_cmds.push_back(NOP_CMD);
   }
 
-  scifi::Status ret = axon::send_axon_packet(axon_tx_sock_, peripheral_addr_, SPI_MSG, calib_cmds);
+  scifi::Status ret = send_packet(SPI_MSG, calib_cmds);
   if (ret != scifi::Status::OK) {
     spdlog::error("IntanRhd2132: Failed to send CALIBRATE command sequence");
     return ret;
@@ -1062,20 +1025,6 @@ std::vector<uint32_t> IntanRhd2132Peripheral::build_acquisition_loop_() const {
     cmds.push_back(rhd_convert(static_cast<uint8_t>(ch.electrode_id())));
   }
   return cmds;
-}
-
-int IntanRhd2132Peripheral::clear_rx_socket_() {
-  int cleared = 0;
-  axon_rx_sock_.set(zmq::sockopt::rcvtimeo, 100);
-  while (true) {
-    zmq::message_t msg;
-    auto ret = axon_rx_sock_.recv(msg);
-    if (!ret) {
-      break;
-    }
-    cleared++;
-  }
-  return cleared;
 }
 
 }  // namespace intan_rhd2132
