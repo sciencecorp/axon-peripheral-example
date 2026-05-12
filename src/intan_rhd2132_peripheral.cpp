@@ -100,12 +100,7 @@ IntanRhd2132Peripheral::IntanRhd2132Peripheral(uint32_t periph_id, uint32_t peri
                                   axon_rx_endpoint) {}
 
 synapse::Peripheral IntanRhd2132Peripheral::to_proto() const {
-  synapse::Peripheral p;
-  p.set_name("IntanRHD2132");
-  p.set_vendor("Intan Technologies");
-  p.set_peripheral_id(this->id);
-  p.set_type(synapse::Peripheral_Type::Peripheral_Type_kBroadbandSource);
-  return p;
+  return from_peripheral_descriptor({.name = "IntanRHD2132", .vendor = "Intan Technologies"});
 }
 
 float IntanRhd2132Peripheral::get_lsb(float /*hp_corner_hz*/, float /*lp_corner_hz*/) const {
