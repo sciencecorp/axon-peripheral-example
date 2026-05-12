@@ -99,10 +99,6 @@ class IntanRhd2132Peripheral : public scifi::plugin::RecordPlugin {
   uint64_t last_seq_num_ = 0;
   bool first_frame_received_ = false;
 
-  // Active SPI_LOOP_RESPONSE subscription owned by the start_recording → stop_recording
-  // lifecycle. Reset to release (the destructor disconnects + unsubscribes the RX socket).
-  std::optional<axon::AxonRxSubscription> loop_subscription_;
-
   uint16_t frame_buffer_[CHANNEL_COUNT] = {};
 };
 

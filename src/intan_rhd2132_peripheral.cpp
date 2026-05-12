@@ -83,6 +83,10 @@ CorrectedImpedance remove_parallel_capacitance(double z_mag_ohms, double phase_d
 
 }  // namespace
 
+// ---------------------------------------------------------------------------
+// constructors: you likely won't need to change much here outside of changing
+// the name to match the class
+// ---------------------------------------------------------------------------
 IntanRhd2132Peripheral::IntanRhd2132Peripheral(uint32_t periph_id, uint32_t peripheral_addr,
                                                zmq::context_t& ctx)
     : IntanRhd2132Peripheral(periph_id, peripheral_addr, ctx, axon::TX_SOCKET, axon::RX_SOCKET) {}
@@ -94,9 +98,6 @@ IntanRhd2132Peripheral::IntanRhd2132Peripheral(uint32_t periph_id, uint32_t peri
     : scifi::plugin::RecordPlugin(periph_id, MAX_SAMPLE_RATE, MAX_BIT_WIDTH, MAX_GAIN,
                                   CHANNEL_COUNT, peripheral_addr, ctx, axon_tx_endpoint,
                                   axon_rx_endpoint) {}
-
-// No custom destructor — RecordPlugin owns the sockets and zmq::socket_t closes
-// itself on destruction.
 
 synapse::Peripheral IntanRhd2132Peripheral::to_proto() const {
   synapse::Peripheral p;
@@ -305,13 +306,11 @@ scifi::Status IntanRhd2132Peripheral::start_recording(uint32_t sample_rate, uint
   dropped_packets_ = 0;
 
   // Subscribe + connect RX socket BEFORE starting the loop. This avoids the race where the
-  // gateware emits responses before our subscription is active. The subscription lives until
-  // stop_recording resets the optional, at which point ~AxonRxSubscription disconnects +
-  // unsubscribes.
-  loop_subscription_ = subscribe(SPI_LOOP_RESPONSE, ZMQ_RECV_TIMEOUT_MS);
-  if (!*loop_subscription_) {
-    loop_subscription_.reset();
-    return scifi::Status::CONNECTION_FAILED;
+  // gateware emits responses before our subscription is active. The persistent subscription
+  // lives until stop_recording calls unsubscribe_persistent(SPI_LOOP_RESPONSE).
+  scifi::Status sub_ret = subscribe_persistent(SPI_LOOP_RESPONSE, ZMQ_RECV_TIMEOUT_MS);
+  if (sub_ret != scifi::Status::OK) {
+    return sub_ret;
   }
 
   // Drain any stale messages that may have arrived during subscription setup. drain_rx
@@ -352,10 +351,9 @@ scifi::Status IntanRhd2132Peripheral::stop_recording() {
   int packets_cleared = drain_rx();
   spdlog::debug("IntanRhd2132: Cleared {} packets from RX socket", packets_cleared);
 
-  // Trigger ~AxonRxSubscription: disconnect from RX endpoint + unsubscribe from
-  // SPI_LOOP_RESPONSE. Exceptions thrown by the underlying zmq calls are swallowed and
-  // logged inside the destructor.
-  loop_subscription_.reset();
+  // Drop the persistent subscription so a re-start_recording reinstalls a fresh filter
+  // (and the channel is back to a clean state for any short-scope helpers).
+  unsubscribe_persistent(SPI_LOOP_RESPONSE);
 
   channels_enabled_ = 0;
   this->channels.clear();
@@ -876,6 +874,9 @@ scifi::Status IntanRhd2132Peripheral::pull_registers_(bool verbose) {
     return scifi::Status::INVALID_STATE;
   }
 
+  // Subscribe to SPI_RESPONSE messages that we expect to get after sending a SPI_MSG command
+  // Once the variable 'sub' goes out of scope, we automatically unsubscribe from the topic
+  // and perform cleanup
   auto sub = subscribe(SPI_RESPONSE, SPI_RESPONSE_TIMEOUT_MS);
   if (!sub) {
     return scifi::Status::CONNECTION_FAILED;
@@ -889,6 +890,7 @@ scifi::Status IntanRhd2132Peripheral::pull_registers_(bool verbose) {
     bool success = false;
 
     while (attempts < max_retry && !success) {
+      // Send SPI_MSG command
       scifi::Status send_ret =
           send_packet(SPI_MSG, {read_cmds[reg_idx]});
       if (send_ret != scifi::Status::OK) {
@@ -897,6 +899,7 @@ scifi::Status IntanRhd2132Peripheral::pull_registers_(bool verbose) {
         continue;
       }
 
+      // Receive response
       auto pkt = receive_packet();
       if (!pkt) {
         spdlog::warn("IntanRhd2132: Timeout reading register {}", reg_idx);
@@ -916,6 +919,7 @@ scifi::Status IntanRhd2132Peripheral::pull_registers_(bool verbose) {
         continue;
       }
 
+      // Parse response
       uint8_t rxd_val = static_cast<uint8_t>((*pkt)[0] & 0xFF);
 
       if (verbose) {
