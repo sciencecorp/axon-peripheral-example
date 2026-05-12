@@ -1,0 +1,20 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+    "vcpkg-configuration": {
+      "overlay-ports": [
+        "./external/sciencecorp/vcpkg/ports"
+      ],
+      "overlay-triplets": [
+        "./external/sciencecorp/vcpkg/triplets"
+      ]
+    },
+    "name": "scifi-peripheral-example",
+    "version": "0.1.0",
+    "builtin-baseline": "e590c2b30c08caf1dd8d612ec602a003f9784b7d",
+    "dependencies": [
+      "cppzmq",
+      "fmt",
+      "protobuf",
+      "spdlog"
+    ]
+}

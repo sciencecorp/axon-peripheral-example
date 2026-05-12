@@ -1,0 +1,46 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 20, "patch": 1 },
+  "configurePresets": [
+    {
+      "name": "dynamic",
+      "binaryDir": "${sourceDir}/build/host",
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": {
+          "type": "FILEPATH",
+          "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        },
+        "BUILD_SHARED_LIBS": { "type": "BOOL", "value": "ON" },
+        "VCPKG_INSTALLED_DIR": {
+          "type": "FILEPATH",
+          "value": "${sourceDir}/build/host/vcpkg_installed"
+        }
+      }
+    },
+    {
+      "name": "dynamic-aarch64",
+      "binaryDir": "${sourceDir}/build/aarch64",
+      "generator": "Unix Makefiles",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": {
+          "type": "FILEPATH",
+          "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        },
+        "VCPKG_INSTALLED_DIR": {
+          "type": "FILEPATH",
+          "value": "${sourceDir}/build/host/vcpkg_installed"
+        },
+        "BUILD_SHARED_LIBS": { "type": "BOOL", "value": "ON" },
+        "BUILD_FOR_ARM64": { "type": "BOOL", "value": "ON" },
+        "CMAKE_BUILD_TYPE": { "type": "STRING", "value": "Release" }
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "dynamic", "configuration": "Debug" },
+    { "name": "release", "configurePreset": "dynamic", "configuration": "Release" },
+    { "name": "cross", "configurePreset": "dynamic-aarch64", "configuration": "Debug" },
+    { "name": "cross-release", "configurePreset": "dynamic-aarch64", "configuration": "Release" }
+  ]
+}

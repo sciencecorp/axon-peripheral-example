@@ -1,0 +1,3 @@
+[submodule "external/sciencecorp/vcpkg"]
+	path = external/sciencecorp/vcpkg
+	url = git@github.com:sciencecorp/vcpkg.git

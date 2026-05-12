@@ -1,0 +1,14 @@
+{
+  "name": "scifi-intan-rhd2132",
+  "kind": "peripheral_plugin",
+  "version": "0.1.0",
+  "abi_version": 1,
+  "description": "Intan RHD2132 32-channel recording front-end",
+  "peripheral_ids": [
+    "0x7001"
+  ],
+  "install": {
+    "type": "shared_library",
+    "target": "/usr/lib/scifi/plugins/intan_rhd2132.so"
+  }
+}

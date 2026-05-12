@@ -1,0 +1,13 @@
+build/
+build-*/
+dist/*.deb
+sdk/*.deb
+.vscode/
+.cache/
+compile_commands.json
+.DS_Store
+!dist/.gitkeep
+!sdk/.gitkeep
+
+# synapsectl stores SFTP credentials here on `--save-password`. Never commit.
+.scienv
