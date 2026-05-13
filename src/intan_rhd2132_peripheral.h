@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -14,7 +16,6 @@
 #include "intan_rhd2132_constants.h"
 #include "intan_rhd2132_registers.h"
 #include "scifi-peripheral-sdk/axon/protocol.h"
-#include "scifi-peripheral-sdk/plugin/sequence_tracker.h"
 #include "scifi-peripheral-sdk/record_plugin.h"
 #include "scifi-peripheral-sdk/scifi/status.h"
 #include "scifi-peripheral-sdk/scifi/time.h"
@@ -38,8 +39,6 @@ class IntanRhd2132Peripheral
 
   // ~IntanRhd2132Peripheral defaults — RecordPlugin owns the sockets and they
   // close themselves when destructed.
-
-  [[nodiscard]] std::vector<axon::MyelinFrame> read_frames(uint32_t num_frames) override;
 
   [[nodiscard]] synapse::Peripheral to_proto() const override;
   [[nodiscard]] float get_lsb(float hp_corner_hz, float lp_corner_hz) const override;
@@ -70,8 +69,15 @@ class IntanRhd2132Peripheral
   [[nodiscard]] scifi::Status start_recording_impl(uint32_t sample_rate, uint32_t bit_width,
                                                    std::vector<synapse::Channel> channels,
                                                    float gain, float hp_corner,
-                                                   float lp_corner) override;
+                                                   float lp_corner,
+                                                   uint32_t& actual_sample_rate) override;
   [[nodiscard]] scifi::Status stop_recording_impl() override;
+
+  // One SPI_LOOP_RESPONSE packet = one frame. Each payload word holds a single
+  // 16-bit sample in its low half: 0x0000_RRRR. Walks channels_enabled_ words
+  // into frame_buffer_ and returns a span over it.
+  [[nodiscard]] std::span<const uint16_t> parse_frame_payload(
+      std::span<const uint32_t> payload_words) override;
 
   [[nodiscard]] scifi::Status configure_bit_width(uint16_t bit_width) override;
   [[nodiscard]] scifi::Status configure_channels(
@@ -96,12 +102,10 @@ class IntanRhd2132Peripheral
   IntanRhd2132Registers registers_;
 
   uint32_t channels_enabled_ = 0;
-  uint64_t samples_delivered_ = 0;
 
-  // Drop detection: gateware emits one SPI_LOOP_RESPONSE per loop iteration (= one frame)
-  // with a monotonically increasing seq_num. The tracker handles the gap arithmetic.
-  scifi::plugin::SequenceTracker seq_tracker_;
-
+  // Scratch buffer for parse_frame_payload. Sized to the chip's hardware
+  // channel count (worst case). Written once per packet, read by the SDK's
+  // read_frames before the next packet arrives — single-threaded by contract.
   uint16_t frame_buffer_[CHANNEL_COUNT] = {};
 };
 

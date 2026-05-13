@@ -92,93 +92,18 @@ float IntanRhd2132Peripheral::get_lsb(float /*hp_corner_hz*/, float /*lp_corner_
 }
 
 // ---------------------------------------------------------------------------
-// read_frames: one SPI_LOOP_RESPONSE message = one full frame (L samples)
+// parse_frame_payload: SDK's read_frames calls this once per SPI_LOOP_RESPONSE
+// packet. Each payload word holds one sample in its low 16 bits (0x0000_RRRR).
 // ---------------------------------------------------------------------------
-std::vector<axon::MyelinFrame> IntanRhd2132Peripheral::read_frames(uint32_t num_frames) {
-  using namespace std::chrono;
-
-  if (!is_recording()) {
+std::span<const uint16_t> IntanRhd2132Peripheral::parse_frame_payload(
+    std::span<const uint32_t> payload_words) {
+  if (channels_enabled_ == 0 || payload_words.size() < channels_enabled_) {
     return {};
   }
-  if (channels_enabled_ == 0) {
-    spdlog::warn("IntanRhd2132: No channels enabled. Cannot read data.");
-    return {};
+  for (uint32_t i = 0; i < channels_enabled_; ++i) {
+    frame_buffer_[i] = static_cast<uint16_t>(payload_words[i] & 0xFFFF);
   }
-  if (num_frames == 0) {
-    return {};
-  }
-
-  const uint32_t sample_rate = static_cast<uint32_t>(registers_.get_sample_rate());
-  if (this->channel_ranges.empty()) {
-    spdlog::warn("IntanRhd2132: No channel ranges set. Cannot read data.");
-    return {};
-  }
-
-  std::vector<axon::MyelinFrame> frames(num_frames);
-  int recv_fail_count = 0;
-  constexpr int recv_fail_max = 3;
-  uint32_t frames_filled = 0;
-
-  while (frames_filled < num_frames && is_recording()) {
-    auto pkt = receive_packet();
-    if (!pkt) {
-      recv_fail_count++;
-      if (recv_fail_count > recv_fail_max) {
-        spdlog::error("IntanRhd2132: Failed to receive from Axon RX socket. Exiting read loop.");
-        break;
-      }
-      continue;
-    }
-    recv_fail_count = 0;
-
-    // Defensive size check on payload word count.
-    if (pkt->payload_size() < channels_enabled_) {
-      spdlog::warn("IntanRhd2132: Undersized message ({} payload words, expected {})",
-                   pkt->payload_size(), channels_enabled_);
-      continue;
-    }
-
-    if (pkt->type() != SPI_LOOP_RESPONSE) {
-      spdlog::warn("IntanRhd2132: Unexpected message type 0x{:04X}, expected SPI_LOOP_RESPONSE",
-                   pkt->type());
-      continue;
-    }
-
-    // Detect drops via seq_num gap. With one packet per iteration the gateware emits a
-    // single seq_num per frame, so consecutive frames must have consecutive seq_nums.
-    const uint64_t lost = seq_tracker_.observe(pkt->seq_num());
-    if (lost > 0) {
-      const uint64_t total = seq_tracker_.dropped_total();
-      if (total <= 10 || total % 1000 == 0) {
-        spdlog::warn("IntanRhd2132: Dropped {} frames total ({} this gap)", total, lost);
-      }
-    }
-
-    // Extract L 16-bit samples from the payload. Each payload word is 0x0000_RRRR.
-    for (uint32_t i = 0; i < channels_enabled_; i++) {
-      frame_buffer_[i] = static_cast<uint16_t>((*pkt)[i] & 0xFFFF);
-    }
-
-    axon::MyelinFrame& frame = frames[frames_filled];
-    frame.set_sample_rate(sample_rate);
-
-    shared_time_source_->update(pkt->seq_num(), sample_rate);
-    frame.set_timestamp(shared_time_source_->timestamp_ns());
-    frame.set_unix_timestamp_ns(scifi::get_steady_clock_now().count());
-    frame.set_sequence_number(pkt->seq_num());
-
-    std::span<uint16_t> sample_data(frame_buffer_, channels_enabled_);
-    frame.set_frame_data(sample_data);
-    frame.set_channel_ranges(this->channel_ranges);
-
-    samples_delivered_ += channels_enabled_;
-    frames_filled++;
-  }
-
-  if (frames_filled < num_frames) {
-    frames.resize(frames_filled);
-  }
-  return frames;
+  return std::span<const uint16_t>(frame_buffer_, channels_enabled_);
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +114,8 @@ scifi::Status IntanRhd2132Peripheral::start_recording_impl(uint32_t sample_rate,
                                                            uint32_t bit_width,
                                                            std::vector<synapse::Channel> channels,
                                                            float gain, float hp_corner,
-                                                           float lp_corner) {
+                                                           float lp_corner,
+                                                           uint32_t& actual_sample_rate) {
   spdlog::info("IntanRhd2132: Starting recording. SR={}, BW={}, channels={}", sample_rate,
                bit_width, channels.size());
 
@@ -201,13 +127,16 @@ scifi::Status IntanRhd2132Peripheral::start_recording_impl(uint32_t sample_rate,
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-  // Configure sample rate
-  double actual_sample_rate;
-  ret = configure_sample_rate(sample_rate, actual_sample_rate);
+  // Configure sample rate. The chip's actual rate after rounding is reported
+  // back to the SDK via the out-parameter so read_frames can stamp it on every
+  // MyelinFrame.
+  double negotiated_sample_rate;
+  ret = configure_sample_rate(sample_rate, negotiated_sample_rate);
   if (ret != scifi::Status::OK) {
     spdlog::error("IntanRhd2132: Failed to configure sample rate.");
     return ret;
   }
+  actual_sample_rate = static_cast<uint32_t>(negotiated_sample_rate);
 
   // Configure bit width
   ret = configure_bit_width(bit_width);
@@ -264,11 +193,6 @@ scifi::Status IntanRhd2132Peripheral::start_recording_impl(uint32_t sample_rate,
     return scifi::Status::FAILURE;
   }
 
-  // Reset drop-tracking state for a fresh loop. The gateware now drops the 2 pipeline-garbage
-  // responses internally; the first SPI_LOOP_RESPONSE we receive is iteration 0.
-  seq_tracker_.reset();
-  samples_delivered_ = 0;
-
   // Subscribe + connect RX socket BEFORE starting the loop. This avoids the race where the
   // gateware emits responses before our subscription is active. The persistent subscription
   // lives until stop_recording calls unsubscribe_persistent(SPI_LOOP_RESPONSE).
@@ -294,7 +218,7 @@ scifi::Status IntanRhd2132Peripheral::start_recording_impl(uint32_t sample_rate,
     return scifi::Status::FAILURE;
   }
 
-  spdlog::info("IntanRhd2132: Recording started. {} channels at {:.1f} Hz", channels_enabled_,
+  spdlog::info("IntanRhd2132: Recording started. {} channels at {} Hz", channels_enabled_,
                actual_sample_rate);
   return scifi::Status::OK;
 }
