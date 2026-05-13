@@ -47,8 +47,6 @@ class IntanRhd2132Peripheral
 
   [[nodiscard]] const std::optional<std::string> validate_ephys_config(
       const synapse::BroadbandSourceConfig& config) const override;
-  [[nodiscard]] const std::optional<std::string> validate_channels(
-      const std::vector<synapse::Channel>& channels) const override;
 
   [[nodiscard]] scifi::Status get_impedance(uint32_t electrode_id, float stim_freq, float& mag,
                                             float& phase) override;

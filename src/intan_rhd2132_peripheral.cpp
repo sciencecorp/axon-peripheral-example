@@ -348,21 +348,6 @@ const std::optional<std::string> IntanRhd2132Peripheral::validate_ephys_config(
   return std::nullopt;
 }
 
-const std::optional<std::string> IntanRhd2132Peripheral::validate_channels(
-    const std::vector<synapse::Channel>& chans) const {
-  for (const auto& ch : chans) {
-    if (ch.electrode_id() >= CHANNEL_COUNT) {
-      return "IntanRhd2132: Electrode ID " + std::to_string(ch.electrode_id()) +
-             " exceeds max channel " + std::to_string(CHANNEL_COUNT - 1);
-    }
-  }
-  if (chans.size() > CHANNEL_COUNT) {
-    return "IntanRhd2132: Too many channels (" + std::to_string(chans.size()) + "), max " +
-           std::to_string(CHANNEL_COUNT);
-  }
-  return std::nullopt;
-}
-
 // ---------------------------------------------------------------------------
 // Impedance measurement
 // ---------------------------------------------------------------------------
