@@ -7,7 +7,6 @@
 #include "intan_rhd2132_constants.h"
 #include "scifi-peripheral-sdk/scifi/status.h"
 
-namespace chips {
 namespace intan_rhd2132 {
 
 class IntanRhd2132Registers {
@@ -53,4 +52,3 @@ class IntanRhd2132Registers {
 };
 
 }  // namespace intan_rhd2132
-}  // namespace chips

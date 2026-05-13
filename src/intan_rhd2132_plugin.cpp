@@ -12,7 +12,7 @@
 #include "intan_rhd2132_peripheral.h"
 
 SCIFI_REGISTER_PERIPHERAL(
-    chips::intan_rhd2132::IntanRhd2132Peripheral,           // Class you implement
+    intan_rhd2132::IntanRhd2132Peripheral,                  // Class you implement
     "intan_rhd2132",                                        // Name shown in device logs
     "0.1.0",                                                // Plugin .deb package version
     static_cast<uint32_t>(axon::PeripheralId::SCI_INTAN_RHD2132));  // Peripheral ID

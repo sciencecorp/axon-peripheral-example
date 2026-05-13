@@ -4,7 +4,6 @@
 
 #include <spdlog/spdlog.h>
 
-namespace chips {
 namespace intan_rhd2132 {
 
 IntanRhd2132Registers::IntanRhd2132Registers() { reset_registers_to_default(); }
@@ -188,4 +187,3 @@ std::vector<uint32_t> IntanRhd2132Registers::build_read_commands() const {
 }
 
 }  // namespace intan_rhd2132
-}  // namespace chips

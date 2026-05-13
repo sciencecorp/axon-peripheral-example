@@ -18,7 +18,6 @@
 #include "scifi-peripheral-sdk/axon/frame.h"
 #include "scifi-peripheral-sdk/scifi/status.h"
 
-namespace chips {
 namespace intan_rhd2132 {
 
 namespace {
@@ -901,4 +900,3 @@ std::vector<uint32_t> IntanRhd2132Peripheral::build_acquisition_loop_() const {
 }
 
 }  // namespace intan_rhd2132
-}  // namespace chips

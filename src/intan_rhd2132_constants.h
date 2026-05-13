@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <set>
 
-namespace chips {
 namespace intan_rhd2132 {
 
 constexpr uint32_t CHANNEL_COUNT = 32;
@@ -233,4 +232,3 @@ constexpr uint8_t REG_DEFAULTS[] = {
 inline constexpr const char* BASE_DIR = "data/intan_rhd2132_";
 
 }  // namespace intan_rhd2132
-}  // namespace chips

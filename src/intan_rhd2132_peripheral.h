@@ -20,7 +20,6 @@
 #include "scifi-peripheral-sdk/scifi/status.h"
 #include "scifi-peripheral-sdk/scifi/time.h"
 
-namespace chips {
 namespace intan_rhd2132 {
 
 class IntanRhd2132Peripheral
@@ -108,4 +107,3 @@ class IntanRhd2132Peripheral
 };
 
 }  // namespace intan_rhd2132
-}  // namespace chips
