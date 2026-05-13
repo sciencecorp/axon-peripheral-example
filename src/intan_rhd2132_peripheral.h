@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <optional>
 #include <string>
 #include <vector>
@@ -15,6 +14,7 @@
 #include "intan_rhd2132_constants.h"
 #include "intan_rhd2132_registers.h"
 #include "scifi-peripheral-sdk/axon/protocol.h"
+#include "scifi-peripheral-sdk/plugin/sequence_tracker.h"
 #include "scifi-peripheral-sdk/record_plugin.h"
 #include "scifi-peripheral-sdk/scifi/status.h"
 #include "scifi-peripheral-sdk/scifi/time.h"
@@ -32,13 +32,7 @@ class IntanRhd2132Peripheral : public scifi::plugin::RecordPlugin {
   // ~IntanRhd2132Peripheral defaults — RecordPlugin owns the sockets and they
   // close themselves when destructed.
 
-  [[nodiscard]] scifi::Status start_recording(uint32_t sample_rate, uint32_t bit_width,
-                                              std::vector<synapse::Channel> channels, float gain,
-                                              float hp_corner = -1, float lp_corner = -1) override;
-  [[nodiscard]] scifi::Status stop_recording() override;
-
   [[nodiscard]] std::vector<axon::MyelinFrame> read_frames(uint32_t num_frames) override;
-  axon::ChannelData read(uint32_t num_frames) override;
 
   [[nodiscard]] synapse::Peripheral to_proto() const override;
   [[nodiscard]] float get_lsb(float hp_corner_hz, float lp_corner_hz) const override;
@@ -66,6 +60,12 @@ class IntanRhd2132Peripheral : public scifi::plugin::RecordPlugin {
   }
 
  protected:
+  [[nodiscard]] scifi::Status start_recording_impl(uint32_t sample_rate, uint32_t bit_width,
+                                                   std::vector<synapse::Channel> channels,
+                                                   float gain, float hp_corner,
+                                                   float lp_corner) override;
+  [[nodiscard]] scifi::Status stop_recording_impl() override;
+
   [[nodiscard]] scifi::Status configure_bit_width(uint16_t bit_width) override;
   [[nodiscard]] scifi::Status configure_channels(
       const std::vector<synapse::Channel>& channels) override;
@@ -88,16 +88,12 @@ class IntanRhd2132Peripheral : public scifi::plugin::RecordPlugin {
 
   IntanRhd2132Registers registers_;
 
-  std::atomic<bool> read_enable_ = false;
-
   uint32_t channels_enabled_ = 0;
   uint64_t samples_delivered_ = 0;
-  uint64_t dropped_packets_ = 0;
 
   // Drop detection: gateware emits one SPI_LOOP_RESPONSE per loop iteration (= one frame)
-  // with a monotonically increasing seq_num. We just verify each new seq_num is the previous + 1.
-  uint64_t last_seq_num_ = 0;
-  bool first_frame_received_ = false;
+  // with a monotonically increasing seq_num. The tracker handles the gap arithmetic.
+  scifi::plugin::SequenceTracker seq_tracker_;
 
   uint16_t frame_buffer_[CHANNEL_COUNT] = {};
 };

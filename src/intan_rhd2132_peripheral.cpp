@@ -113,7 +113,7 @@ float IntanRhd2132Peripheral::get_lsb(float /*hp_corner_hz*/, float /*lp_corner_
 std::vector<axon::MyelinFrame> IntanRhd2132Peripheral::read_frames(uint32_t num_frames) {
   using namespace std::chrono;
 
-  if (!read_enable_) {
+  if (!is_recording()) {
     return {};
   }
   if (channels_enabled_ == 0) {
@@ -135,7 +135,7 @@ std::vector<axon::MyelinFrame> IntanRhd2132Peripheral::read_frames(uint32_t num_
   constexpr int recv_fail_max = 3;
   uint32_t frames_filled = 0;
 
-  while (frames_filled < num_frames && read_enable_) {
+  while (frames_filled < num_frames && is_recording()) {
     auto pkt = receive_packet();
     if (!pkt) {
       recv_fail_count++;
@@ -162,15 +162,13 @@ std::vector<axon::MyelinFrame> IntanRhd2132Peripheral::read_frames(uint32_t num_
 
     // Detect drops via seq_num gap. With one packet per iteration the gateware emits a
     // single seq_num per frame, so consecutive frames must have consecutive seq_nums.
-    if (first_frame_received_ && pkt->seq_num() != last_seq_num_ + 1) {
-      uint64_t lost = pkt->seq_num() - last_seq_num_ - 1;
-      dropped_packets_ += lost;
-      if (dropped_packets_ <= 10 || dropped_packets_ % 1000 == 0) {
-        spdlog::warn("IntanRhd2132: Dropped {} frames total ({} this gap)", dropped_packets_, lost);
+    const uint64_t lost = seq_tracker_.observe(pkt->seq_num());
+    if (lost > 0) {
+      const uint64_t total = seq_tracker_.dropped_total();
+      if (total <= 10 || total % 1000 == 0) {
+        spdlog::warn("IntanRhd2132: Dropped {} frames total ({} this gap)", total, lost);
       }
     }
-    last_seq_num_ = pkt->seq_num();
-    first_frame_received_ = true;
 
     // Extract L 16-bit samples from the payload. Each payload word is 0x0000_RRRR.
     for (uint32_t i = 0; i < channels_enabled_; i++) {
@@ -199,28 +197,17 @@ std::vector<axon::MyelinFrame> IntanRhd2132Peripheral::read_frames(uint32_t num_
   return frames;
 }
 
-axon::ChannelData IntanRhd2132Peripheral::read(uint32_t num_frames) {
-  if (!read_enable_) {
-    return {};
-  }
-  std::vector<axon::MyelinFrame> myelin_frames = read_frames(num_frames);
-  return axon::to_channel_data(myelin_frames, this->channels);
-}
-
 // ---------------------------------------------------------------------------
-// Recording lifecycle
+// Recording lifecycle — RecordPlugin's NVI wrappers toggle is_recording() for
+// us, so we just implement the _impl variants.
 // ---------------------------------------------------------------------------
-scifi::Status IntanRhd2132Peripheral::start_recording(uint32_t sample_rate, uint32_t bit_width,
-                                                      std::vector<synapse::Channel> channels,
-                                                      float gain, float hp_corner,
-                                                      float lp_corner) {
+scifi::Status IntanRhd2132Peripheral::start_recording_impl(uint32_t sample_rate,
+                                                           uint32_t bit_width,
+                                                           std::vector<synapse::Channel> channels,
+                                                           float gain, float hp_corner,
+                                                           float lp_corner) {
   spdlog::info("IntanRhd2132: Starting recording. SR={}, BW={}, channels={}", sample_rate,
                bit_width, channels.size());
-
-  if (read_enable_) {
-    spdlog::warn("IntanRhd2132: Recording already in progress.");
-    return scifi::Status::INVALID_STATE;
-  }
 
   // Reset the SPI controller
   scifi::Status ret = send_packet(SPI_RESET, {});
@@ -295,10 +282,8 @@ scifi::Status IntanRhd2132Peripheral::start_recording(uint32_t sample_rate, uint
 
   // Reset drop-tracking state for a fresh loop. The gateware now drops the 2 pipeline-garbage
   // responses internally; the first SPI_LOOP_RESPONSE we receive is iteration 0.
-  first_frame_received_ = false;
-  last_seq_num_ = 0;
+  seq_tracker_.reset();
   samples_delivered_ = 0;
-  dropped_packets_ = 0;
 
   // Subscribe + connect RX socket BEFORE starting the loop. This avoids the race where the
   // gateware emits responses before our subscription is active. The persistent subscription
@@ -315,8 +300,6 @@ scifi::Status IntanRhd2132Peripheral::start_recording(uint32_t sample_rate, uint
     spdlog::debug("IntanRhd2132: Drained {} stale messages before starting loop", drained);
   }
 
-  read_enable_ = true;
-
   // Start the acquisition loop. From here on, every SPI response we receive corresponds
   // (after the initial 2 garbage samples) to a known channel position via seq_num arithmetic.
   std::vector<uint32_t> loop_cmds = build_acquisition_loop_();
@@ -324,7 +307,6 @@ scifi::Status IntanRhd2132Peripheral::start_recording(uint32_t sample_rate, uint
   ret = send_packet(SPI_LOOP, loop_cmds);
   if (ret != scifi::Status::OK) {
     spdlog::error("IntanRhd2132: Failed to start acquisition loop.");
-    read_enable_ = false;
     return scifi::Status::FAILURE;
   }
 
@@ -333,9 +315,8 @@ scifi::Status IntanRhd2132Peripheral::start_recording(uint32_t sample_rate, uint
   return scifi::Status::OK;
 }
 
-scifi::Status IntanRhd2132Peripheral::stop_recording() {
+scifi::Status IntanRhd2132Peripheral::stop_recording_impl() {
   spdlog::debug("IntanRhd2132: Stopping recording");
-  read_enable_ = false;
 
   // Stop the acquisition loop
   scifi::Status ret = send_packet(SPI_LOOP_STOP, {});
@@ -483,7 +464,7 @@ const std::optional<std::string> IntanRhd2132Peripheral::validate_channels(
 // dividing the measured voltage phasor by the current phasor implied by the DAC waveform.
 scifi::Status IntanRhd2132Peripheral::get_impedance(uint32_t electrode_id, float stim_freq,
                                                     float& mag, float& phase) {
-  if (read_enable_) {
+  if (is_recording()) {
     spdlog::error("IntanRhd2132: Cannot measure impedance while recording.");
     return scifi::Status::INVALID_STATE;
   }
@@ -818,7 +799,7 @@ synapse::QueryResponse IntanRhd2132Peripheral::self_test(const synapse::SelfTest
   synapse::QueryResponse resp;
   auto* resp_st = resp.mutable_status();
 
-  if (read_enable_) {
+  if (is_recording()) {
     spdlog::error("IntanRhd2132: Cannot run self test while recording is active");
     resp_st->set_code(synapse::StatusCode::kFailedPrecondition);
     return resp;
@@ -845,7 +826,7 @@ synapse::QueryResponse IntanRhd2132Peripheral::self_test(const synapse::SelfTest
 // Private helpers
 // ---------------------------------------------------------------------------
 scifi::Status IntanRhd2132Peripheral::push_registers_() {
-  if (read_enable_) {
+  if (is_recording()) {
     spdlog::warn("IntanRhd2132: Cannot push registers while recording is enabled");
     return scifi::Status::INVALID_STATE;
   }
@@ -864,7 +845,7 @@ scifi::Status IntanRhd2132Peripheral::push_registers_() {
 }
 
 scifi::Status IntanRhd2132Peripheral::pull_registers_(bool verbose) {
-  if (read_enable_) {
+  if (is_recording()) {
     spdlog::warn("IntanRhd2132: Cannot pull registers while recording is enabled");
     return scifi::Status::INVALID_STATE;
   }
