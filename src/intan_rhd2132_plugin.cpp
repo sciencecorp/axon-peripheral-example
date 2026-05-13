@@ -11,14 +11,8 @@
 
 #include "intan_rhd2132_peripheral.h"
 
-namespace {
-constexpr uint32_t kPeripheralIds[] = {
-    static_cast<uint32_t>(axon::PeripheralId::SCI_INTAN_RHD2132),
-};
-}  // namespace
-
 SCIFI_REGISTER_PERIPHERAL(
-    chips::intan_rhd2132::IntanRhd2132Peripheral,
-    "intan_rhd2132",
-    "0.1.0",
-    kPeripheralIds);
+    chips::intan_rhd2132::IntanRhd2132Peripheral,           // Class you implement
+    "intan_rhd2132",                                        // Name shown in device logs
+    "0.1.0",                                                // Plugin .deb package version
+    static_cast<uint32_t>(axon::PeripheralId::SCI_INTAN_RHD2132));  // Peripheral ID
