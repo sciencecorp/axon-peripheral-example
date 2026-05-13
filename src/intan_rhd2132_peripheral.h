@@ -22,12 +22,19 @@
 namespace chips {
 namespace intan_rhd2132 {
 
-class IntanRhd2132Peripheral : public scifi::plugin::RecordPlugin {
+class IntanRhd2132Peripheral
+    : public scifi::plugin::RecordPluginWithLimits<IntanRhd2132Peripheral> {
  public:
-  IntanRhd2132Peripheral(uint32_t periph_id, uint32_t peripheral_addr, zmq::context_t& ctx,
-                         const std::string& axon_tx_endpoint, const std::string& axon_rx_endpoint);
-  explicit IntanRhd2132Peripheral(uint32_t periph_id, uint32_t peripheral_addr,
-                                  zmq::context_t& ctx);
+  // Hardware-limits contract. The SDK reads these at construction time and
+  // forwards them into RecordPlugin.
+  SCIFI_RECORD_PLUGIN_LIMITS(
+      /*max_sample_rate  =*/ MAX_SAMPLE_RATE,
+      /*max_bit_width    =*/ MAX_BIT_WIDTH,
+      /*max_gain         =*/ MAX_GAIN,
+      /*max_channel_count=*/ CHANNEL_COUNT);
+
+  // No constructor body needed — inherit RecordPluginWithLimits's 5-arg ctor.
+  using RecordPluginWithLimits::RecordPluginWithLimits;
 
   // ~IntanRhd2132Peripheral defaults — RecordPlugin owns the sockets and they
   // close themselves when destructed.

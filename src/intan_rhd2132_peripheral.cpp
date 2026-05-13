@@ -83,22 +83,6 @@ CorrectedImpedance remove_parallel_capacitance(double z_mag_ohms, double phase_d
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
-// constructors: you likely won't need to change much here outside of changing
-// the name to match the class
-// ---------------------------------------------------------------------------
-IntanRhd2132Peripheral::IntanRhd2132Peripheral(uint32_t periph_id, uint32_t peripheral_addr,
-                                               zmq::context_t& ctx)
-    : IntanRhd2132Peripheral(periph_id, peripheral_addr, ctx, axon::TX_SOCKET, axon::RX_SOCKET) {}
-
-IntanRhd2132Peripheral::IntanRhd2132Peripheral(uint32_t periph_id, uint32_t peripheral_addr,
-                                               zmq::context_t& ctx,
-                                               const std::string& axon_tx_endpoint,
-                                               const std::string& axon_rx_endpoint)
-    : scifi::plugin::RecordPlugin(periph_id, MAX_SAMPLE_RATE, MAX_BIT_WIDTH, MAX_GAIN,
-                                  CHANNEL_COUNT, peripheral_addr, ctx, axon_tx_endpoint,
-                                  axon_rx_endpoint) {}
-
 synapse::Peripheral IntanRhd2132Peripheral::to_proto() const {
   return from_peripheral_descriptor({.name = "IntanRHD2132", .vendor = "Intan Technologies"});
 }
