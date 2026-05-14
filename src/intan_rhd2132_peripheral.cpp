@@ -163,10 +163,26 @@ scifi::Status IntanRhd2132Peripheral::start_recording_impl(uint32_t sample_rate,
     }
   }
 
-  // Push register configuration to hardware
+  // Push register configuration to hardware, with amp fast-settle asserted.
+  // The chip's AC-coupling caps at the amplifier inputs are fully discharged
+  // after a power cycle (e.g. USB unplug/replug), and their RC time constant
+  // at low HP cutoffs is slow — ~1.6 s at 0.1 Hz, so a natural settle is
+  // many seconds of garbage data at the start of the first recording.
+  // Datasheet register 0 bit 5 (amp_fast_settle) clamps the amp outputs to
+  // baseline, swamping the caps in ~ms. We hold it asserted across a short
+  // delay, then release it before the SPI loop starts so normal operation
+  // resumes with the amps already at their settled DC point.
+  registers_.set_fast_settle(true);
   ret = push_registers_();
   if (ret != scifi::Status::OK) {
     spdlog::error("IntanRhd2132: Failed to push registers.");
+    return ret;
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  registers_.set_fast_settle(false);
+  ret = push_registers_();
+  if (ret != scifi::Status::OK) {
+    spdlog::error("IntanRhd2132: Failed to release amp fast-settle.");
     return ret;
   }
 
