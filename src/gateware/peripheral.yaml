@@ -1,0 +1,27 @@
+schema_version: 1
+target_profile: via-devkit
+project:
+  name: gateware
+  description: ""
+build:
+  radiant_version: "2024.1"
+peripherals:
+  - name: chip_peripheral
+    dev_peripheral_id: 61441
+    description: ""
+    type: record
+    vendor: ""
+    fpga:
+      module: chip_peripheral_peripheral_top
+      sources:
+        - src/chip_peripheral_peripheral.sv
+      constraints:
+        sdc: []
+        pdc: []
+      io: []
+    api:
+      msg_types: []
+    verification:
+      cocotb_tests:
+        - test/tb/test_chip_peripheral.py
+      sv_tests: []

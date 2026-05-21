@@ -8,7 +8,7 @@ compile_commands.json
 .DS_Store
 !dist/.gitkeep
 !sdk/.gitkeep
-
+.venv
 # synapsectl stores SFTP credentials here on `--save-password`. Never commit.
 .scienv
 
