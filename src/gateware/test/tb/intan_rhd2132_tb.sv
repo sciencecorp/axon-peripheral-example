@@ -1,21 +1,21 @@
 `timescale 1ns / 1ps
 
-// chip_peripheral_tb
+// intan_rhd2132_tb
 // ----------------------
-// Flat-AXI testbench wrapper for the chip_peripheral_peripheral_top peripheral DUT.
+// Flat-AXI testbench wrapper for the intan_rhd2132_peripheral_top peripheral DUT.
 //
 // cocotb cannot connect directly to SystemVerilog `interface` ports, so this
 // wrapper presents a flat logic-port interface to the simulator. The flat
 // ports are bound 1:1 to an internal `axi4_stream_interface` instance, which
 // drives the DUT.
 //
-// IMPORTANT — encap fail-safe: the AXI-Stream sideband signals (tkeep, tid,
+// IMPORTANT — sideband defaults: the AXI-Stream sideband signals (tkeep, tid,
 // tdest, tuser) are driven to safe defaults on the rx side. If these were
 // left floating, `X` values would propagate into the DUT and trip
 // `COCOTB_RESOLVE_X=VALUE_ERROR` in the cocotb runner. Do NOT remove the
 // sideband default assignments unless you have a peripheral-specific reason.
 
-module chip_peripheral_tb (
+module intan_rhd2132_tb (
   input  logic clk,
   input  logic rst,
   input  logic [31:0] rx_tdata,
@@ -50,7 +50,7 @@ module chip_peripheral_tb (
   assign tx_tlast     = tx_if.tlast;
   assign tx_if.tready = tx_tready;
 
-  chip_peripheral_peripheral_top dut (
+  intan_rhd2132_peripheral_top dut (
     .clk(clk),
     .rst(rst),
     .periph_addr(PERIPH_ADDR),

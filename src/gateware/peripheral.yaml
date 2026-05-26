@@ -4,17 +4,17 @@ project:
   name: gateware
   description: ""
 build:
-  radiant_version: "2024.1"
+  radiant_version: "2024.2"
 peripherals:
-  - name: chip_peripheral
-    dev_peripheral_id: 61441
+  - name: intan_rhd2132
+    dev_peripheral_id: 0xF001
     description: ""
     type: record
     vendor: ""
     fpga:
-      module: chip_peripheral_peripheral_top
+      module: intan_rhd2132_peripheral_top
       sources:
-        - src/chip_peripheral_peripheral.sv
+        - src/intan_rhd2132_peripheral.sv
       constraints:
         sdc: []
         pdc: []
@@ -23,5 +23,5 @@ peripherals:
       msg_types: []
     verification:
       cocotb_tests:
-        - test/tb/test_chip_peripheral.py
+        - test/tb/test_intan_rhd2132.py
       sv_tests: []

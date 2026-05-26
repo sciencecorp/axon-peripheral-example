@@ -1,21 +1,20 @@
-// AUTO-GENERATED — checksum: 6cb7243bac132560436ee31fae95fb2658ec5aaeb707aade0ceae0d13d9029e8
+// AUTO-GENERATED — checksum: d54116859a03f4ae188ebd269b3947a3f5d4847d21f2d42610146ed9c060e83a
 /*
  * Science Corporation — Axon Peripheral SDK
- * via_top.sv — AUTO-GENERATED from peripheral.yaml by axon-sdk codegen.
+ * via_top.sv — Generated from peripheral.yaml by axon-peripheral-sdk codegen.
  *
- * Do NOT hand-edit. The `// AUTO-GENERATED — checksum: <sha>` line at the top
- * is the file's fingerprint; editing will block the next regeneration unless
- * --force-regenerate is passed.
+ * You can hand-edit this file. The `// AUTO-GENERATED — checksum: <sha>` line
+ * at the top is the file's fingerprint: it lets `axon-peripheral-sdk regenerate`
+ * notice that you've modified the file and refuse to overwrite your edits.
+ * If you want a fresh re-emit (discarding your hand-edits), pass
+ * `--force-regenerate` to acknowledge the loss.
  *
- * This top mirrors the SDK-shipped scIR external pin list (clock + IR TX +
+ * The body below mirrors the SDK-shipped scIR external pin list (clock + IR TX +
  * nRF SPI bridge + LDO enable) and wires 1 user peripheral into the
- * encrypted `transport` bundle. ASIC01/MUX01 and other production-only
- * peripherals are intentionally absent — the SDK target leaves those pins
- * free for the user's `peripheral.yaml fpga.io[]` claims. *
- * Each user peripheral is framed by a decap (upstream) + encap (downstream)
- * pair; the peripheral-side `rx_axis` / `tx_axis` carry the simplified
- * peripheral-contract frame, while the transport-side carries the full Axon
- * packet (header + payload + CRC). */
+ * SDK transport bundle. ASIC01/MUX01 and other production-only peripherals
+ * are intentionally absent — the SDK target leaves those pins free for the
+ * user's `peripheral.yaml fpga.io[]` claims.
+ */
 
 `resetall `timescale 1ns / 1ps `default_nettype none
 module via_top (
@@ -34,9 +33,8 @@ module via_top (
 
     // ------------------------------------------------------------------------
     // Configuration constants — N user peripherals, zero built-ins. The
-    // transport bundle's AXI-Stream switch scales 1:1 with N_USER (no phantom
-    // host slot at the wrapper — MainController appends its own host port
-    // internally to its embedded axis_switch).
+    // transport bundle's AXI-Stream switch scales 1:1 with N_USER (the
+    // transport handles its own host-side wiring internally).
     // ------------------------------------------------------------------------
     localparam unsigned N_USER          = 1;
     localparam unsigned S_COUNT         = 1;  // S_COUNT         = N_USER
@@ -49,7 +47,7 @@ module via_top (
     localparam unsigned USER_WIDTH      = 1;
 
     // User peripheral IDs (pinned in peripheral.yaml, must lie in 0xF001..0xFFFE)
-    localparam unsigned USER_CHIP_PERIPHERAL_ID = 16'hF001;
+    localparam unsigned USER_INTAN_RHD2132_ID = 16'hF001;
 
     // ------------------------------------------------------------------------
     // Clocks, reset, PLL — mirrors scIR.
@@ -85,73 +83,68 @@ module via_top (
 
     logic [31:0] central_address;
     // ------------------------------------------------------------------------
-    // User peripheral — chip_peripheral (module=chip_peripheral_peripheral_top, id=16'hF001)
-    //
-    // Wiring chain (downstream → user):
-    //   transport.m_axis[k] → chip_peripheral_transport_m_if → decap → chip_peripheral_sink_axis_if → u_user_chip_peripheral.rx_axis
-    // Wiring chain (user → upstream):
-    //   u_user_chip_peripheral.tx_axis → chip_peripheral_src_axis_if → encap → chip_peripheral_transport_s_if → transport.s_axis[k]
+    // User peripheral — intan_rhd2132 (module=intan_rhd2132_peripheral_top, id=16'hF001)
     // ------------------------------------------------------------------------
 
-    // Transport-side interfaces (full Axon packet — wider tdest/tid carry the
-    // axis_switch routing index).
+    // Transport-side interfaces — wider tdest/tid carry the axis_switch
+    // routing index across the SDK transport bundle.
     axi4_stream_interface #(
         .DATA_WIDTH(DATA_WIDTH),
         .ID_WIDTH  (ID_WIDTH),
         .DEST_WIDTH(DEST_WIDTH + $clog2(M_COUNT + 1)),
         .USER_WIDTH(USER_WIDTH)
-    ) chip_peripheral_transport_s_if ();
+    ) intan_rhd2132_transport_s_if ();
 
     axi4_stream_interface #(
         .DATA_WIDTH(DATA_WIDTH),
         .ID_WIDTH  (ID_WIDTH + $clog2(S_COUNT + 1)),
         .DEST_WIDTH(DEST_WIDTH),
         .USER_WIDTH(USER_WIDTH)
-    ) chip_peripheral_transport_m_if ();
+    ) intan_rhd2132_transport_m_if ();
 
-    // Peripheral-side interfaces (simplified peripheral-contract frame:
-    // payload only, no Axon header/CRC; tid=8, tdest=1, tuser=1).
+    // Peripheral-side interfaces — the user peripheral sees these directly
+    // on its rx_axis / tx_axis ports (tid=8, tdest=1, tuser=1).
     axi4_stream_interface #(
         .DATA_WIDTH(DATA_WIDTH),
         .ID_WIDTH  (ID_WIDTH),
         .DEST_WIDTH(DEST_WIDTH),
         .USER_WIDTH(USER_WIDTH)
-    ) chip_peripheral_src_axis_if ();
+    ) intan_rhd2132_src_axis_if ();
 
     axi4_stream_interface #(
         .DATA_WIDTH(DATA_WIDTH),
         .ID_WIDTH  (ID_WIDTH),
         .DEST_WIDTH(DEST_WIDTH),
         .USER_WIDTH(USER_WIDTH)
-    ) chip_peripheral_sink_axis_if ();
+    ) intan_rhd2132_sink_axis_if ();
 
-    decap u_decap_chip_peripheral (
+    decap u_decap_intan_rhd2132 (
         .clk         (clkmc),
         .rstn        (~rst_sync[1]),
-        .sink_axis_if(chip_peripheral_transport_m_if),
-        .src_axis_if (chip_peripheral_sink_axis_if)
+        .sink_axis_if(intan_rhd2132_transport_m_if),
+        .src_axis_if (intan_rhd2132_sink_axis_if)
     );
 
-    encap u_encap_chip_peripheral (
+    encap u_encap_intan_rhd2132 (
         .clk         (clkmc),
         .rstn        (~rst_sync[1]),
-        .periph_addr (central_address | USER_CHIP_PERIPHERAL_ID),
+        .periph_addr (central_address | USER_INTAN_RHD2132_ID),
         .dest_addr   (32'h0000_0000),
-        .sink_axis_if(chip_peripheral_src_axis_if),
-        .src_axis_if (chip_peripheral_transport_s_if)
+        .sink_axis_if(intan_rhd2132_src_axis_if),
+        .src_axis_if (intan_rhd2132_transport_s_if)
     );
 
-    chip_peripheral_peripheral_top u_user_chip_peripheral (
+    intan_rhd2132_peripheral_top u_user_intan_rhd2132 (
         .clk         (clkmc),
         .rst         (rst_sync[1]),
-        .periph_addr (central_address | USER_CHIP_PERIPHERAL_ID),
-        .rx_axis     (chip_peripheral_sink_axis_if),
-        .tx_axis     (chip_peripheral_src_axis_if)    );
+        .periph_addr (central_address | USER_INTAN_RHD2132_ID),
+        .rx_axis     (intan_rhd2132_sink_axis_if),
+        .tx_axis     (intan_rhd2132_src_axis_if)    );
 
     // ------------------------------------------------------------------------
-    // Transport (encrypted bundle: MainController + packet_crc +
-    // serdes_tx_cont + soc_spi_slave). Switch ports get the user peripherals
-    // in the order they appear in peripheral.yaml.
+    // Transport — the SDK-shipped bundle that handles framing, the AXI-Stream
+    // switch, the IR TX path, and the nRF SPI bridge. Switch ports get the
+    // user peripherals in the order they appear in peripheral.yaml.
     // ------------------------------------------------------------------------
     logic serial_data_out;
     logic [31:0] debug_data_serdes_tx;
@@ -181,23 +174,23 @@ module via_top (
         .nrf_miso_o   (nrf_miso_o),
         .serial_data_o(serial_data_out),
 
-        .s_axis_tdata ({ chip_peripheral_transport_s_if.tdata }),
-        .s_axis_tvalid({ chip_peripheral_transport_s_if.tvalid }),
-        .s_axis_tready({ chip_peripheral_transport_s_if.tready }),
-        .s_axis_tlast ({ chip_peripheral_transport_s_if.tlast }),
-        .s_axis_tid   ({ chip_peripheral_transport_s_if.tid }),
-        .s_axis_tdest ({ chip_peripheral_transport_s_if.tdest }),
-        .s_axis_tuser ({ chip_peripheral_transport_s_if.tuser }),
+        .s_axis_tdata ({ intan_rhd2132_transport_s_if.tdata }),
+        .s_axis_tvalid({ intan_rhd2132_transport_s_if.tvalid }),
+        .s_axis_tready({ intan_rhd2132_transport_s_if.tready }),
+        .s_axis_tlast ({ intan_rhd2132_transport_s_if.tlast }),
+        .s_axis_tid   ({ intan_rhd2132_transport_s_if.tid }),
+        .s_axis_tdest ({ intan_rhd2132_transport_s_if.tdest }),
+        .s_axis_tuser ({ intan_rhd2132_transport_s_if.tuser }),
 
-        .m_axis_tdata ({ chip_peripheral_transport_m_if.tdata }),
-        .m_axis_tvalid({ chip_peripheral_transport_m_if.tvalid }),
-        .m_axis_tready({ chip_peripheral_transport_m_if.tready }),
-        .m_axis_tlast ({ chip_peripheral_transport_m_if.tlast }),
-        .m_axis_tid   ({ chip_peripheral_transport_m_if.tid }),
-        .m_axis_tdest ({ chip_peripheral_transport_m_if.tdest }),
-        .m_axis_tuser ({ chip_peripheral_transport_m_if.tuser }),
+        .m_axis_tdata ({ intan_rhd2132_transport_m_if.tdata }),
+        .m_axis_tvalid({ intan_rhd2132_transport_m_if.tvalid }),
+        .m_axis_tready({ intan_rhd2132_transport_m_if.tready }),
+        .m_axis_tlast ({ intan_rhd2132_transport_m_if.tlast }),
+        .m_axis_tid   ({ intan_rhd2132_transport_m_if.tid }),
+        .m_axis_tdest ({ intan_rhd2132_transport_m_if.tdest }),
+        .m_axis_tuser ({ intan_rhd2132_transport_m_if.tuser }),
 
-        .peripheral_ids({ USER_CHIP_PERIPHERAL_ID }),
+        .peripheral_ids({ USER_INTAN_RHD2132_ID }),
         .central_address(central_address),
 
         .debug_data_serdes_tx_o      (debug_data_serdes_tx),

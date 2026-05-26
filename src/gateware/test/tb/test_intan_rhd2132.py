@@ -1,11 +1,11 @@
-"""cocotb tests for the chip_peripheral peripheral.
+"""cocotb tests for the intan_rhd2132 peripheral.
 
 Day-1 loopback verification — the template DUT echoes every word it
 receives. Replace the assertions in ``test_loopback`` and ``test_random``
 with peripheral-specific checks as you build out your RTL.
 
 # CUSTOMIZE: this file is a starter, NOT auto-regenerated. Hand-edits are
-# expected and preserved by ``axon-sdk regenerate``.
+# expected and preserved by ``axon-peripheral-sdk regenerate``.
 """
 from __future__ import annotations
 
@@ -23,9 +23,9 @@ from cocotbext.axi import (
     AxiStreamSource,
 )
 
-from axon_sdk.profiles.paths import resolve_install_path
-from axon_sdk.sim.cocotb_runner import cocotb_pytest_runner
-from axon_sdk.sim.frames import generate_packet, parse_packet
+from axon_peripheral_sdk.profiles.paths import resolve_install_path
+from axon_peripheral_sdk.sim.cocotb_runner import cocotb_pytest_runner
+from axon_peripheral_sdk.sim.frames import generate_packet, parse_packet
 
 
 CLK_PERIOD_NS = 12.5
@@ -124,15 +124,15 @@ def test_runner(testcase: str) -> None:
 
     # CUSTOMIZE: edit ``sources`` to add additional SV files. The list below
     # is seeded from ``peripheral.yaml`` at codegen time, but hand-edits here
-    # are preserved across ``axon-sdk regenerate``.
+    # are preserved across ``axon-peripheral-sdk regenerate``.
     """
     sources = [
-        os.path.join(_PROJECT_ROOT, "src/chip_peripheral_peripheral.sv"),
-        os.path.join(_PROJECT_ROOT, "test", "tb", "chip_peripheral_tb.sv"),
+        os.path.join(_PROJECT_ROOT, "src/intan_rhd2132_peripheral.sv"),
+        os.path.join(_PROJECT_ROOT, "test", "tb", "intan_rhd2132_tb.sv"),
     ]
     cocotb_pytest_runner(
         sources=sources,
-        toplevel="chip_peripheral_tb",
+        toplevel="intan_rhd2132_tb",
         module=__name__,
         testcase=testcase,
     )
