@@ -8,15 +8,17 @@ Fork this repo, replace `src/` with your peripheral, edit `manifest.json`, and y
 ```bash
 git submodule update --init --recursive
 
-synapsectl peripherals build .
-synapsectl -u "your-device-identifier" peripherals deploy .
+synapsectl peripherals build both .
+synapsectl -u "your-device-identifier" peripherals deploy both .
 ```
 
-This cross-compiles `build/aarch64/intan_rhd2132.so` and SFTP-uploads it to
-`/opt/scifi/data/peripherals/intan_rhd2132.so` on the device. The
-`scifi-server` daemon scans that directory on startup, dlopens each plugin,
-and dispatches matching peripheral IDs to the plugin's factory — no apt
-install, no systemd service, no restart needed beyond `scifi-server`.
+This cross-compiles the driver and gateware, packages them into a `.deb`
+(staged under `dist/`), and deploys it; the driver installs to
+`/usr/lib/scifi/plugins/intan_rhd2132.so` and the bitstream to
+`/usr/lib/scifi/gateware/intan_rhd2132.bit` on the device. After deploy
+reports success, restart `scifi-server` yourself — on startup it scans
+`/usr/lib/scifi/plugins/`, dlopens each plugin, and dispatches matching
+peripheral IDs to the plugin's factory.
 
 ## What's in here
 
@@ -63,7 +65,7 @@ whichever you're iterating on (or both):
 cp ../scifi-peripheral-sdk/scifi-peripheral-sdk_0.1.0_arm64.deb sdk/
 # Gateware SDK
 cp ../axon-peripheral-sdk/axon-peripheral-sdk_0.1.0_amd64.deb sdk/
-synapsectl peripherals build .
+synapsectl peripherals build both .
 ```
 
 `sdk/*.deb` is gitignored, so you don't need to worry about accidentally
