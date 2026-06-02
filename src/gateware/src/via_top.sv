@@ -1,4 +1,4 @@
-// AUTO-GENERATED — checksum: d54116859a03f4ae188ebd269b3947a3f5d4847d21f2d42610146ed9c060e83a
+// AUTO-GENERATED — checksum: 97ef77408011d9d13e78499227200221ac3cdc299d02020491933161b50f275c
 /*
  * Science Corporation — Axon Peripheral SDK
  * via_top.sv — Generated from peripheral.yaml by axon-peripheral-sdk codegen.
@@ -9,11 +9,11 @@
  * If you want a fresh re-emit (discarding your hand-edits), pass
  * `--force-regenerate` to acknowledge the loss.
  *
- * The body below mirrors the SDK-shipped scIR external pin list (clock + IR TX +
+ * The body below mirrors the board reference top-level external pin list (clock + IR TX +
  * nRF SPI bridge + LDO enable) and wires 1 user peripheral into the
- * SDK transport bundle. ASIC01/MUX01 and other production-only peripherals
- * are intentionally absent — the SDK target leaves those pins free for the
- * user's `peripheral.yaml fpga.io[]` claims.
+ * SDK transport bundle. Production-only peripherals are intentionally absent —
+ * the SDK target leaves those pins free for the user's
+ * `peripheral.yaml fpga.io[]` claims.
  */
 
 `resetall `timescale 1ns / 1ps `default_nettype none
@@ -50,7 +50,7 @@ module via_top (
     localparam unsigned USER_INTAN_RHD2132_ID = 16'hF001;
 
     // ------------------------------------------------------------------------
-    // Clocks, reset, PLL — mirrors scIR.
+    // Clocks, reset, PLL — board clocks, reset, PLL.
     // ------------------------------------------------------------------------
     localparam unsigned INPUT_CLK_FREQ = 48_000_000;
     localparam unsigned DDR_CLK_FREQ   = 160_000_000;

@@ -15,4 +15,4 @@ SCIFI_REGISTER_PERIPHERAL(
     intan_rhd2132::IntanRhd2132Peripheral,                  // Class you implement
     "intan_rhd2132",                                        // Name shown in device logs
     "0.1.0",                                                // Plugin .deb package version
-    static_cast<uint32_t>(0x9000));  // Peripheral ID
+    static_cast<uint32_t>(0xF001));  // Peripheral ID (user-assignable window 0xF001..0xFFFE)

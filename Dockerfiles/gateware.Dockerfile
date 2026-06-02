@@ -4,6 +4,11 @@ FROM ubuntu:22.04
 
 ARG TARGETPLATFORM
 ARG RADIANT_VERSION=2024.2
+# Bump this ARG when Lattice ships a new 2024.2.x build; do not edit RUN steps.
+# Pinned against electronics-infra/install_radiant.sh (RADIANT_VERSION=2024.2.0.3.4_Radiant_lin)
+# and verified via HTTP 200 from
+# https://files.latticesemi.com/Radiant/2024.2/2024.2.0.3.4_Radiant_lin.zip
+ARG RADIANT_BUILD=2024.2.0.3.4
 ARG HOST_UID=1000
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -13,7 +18,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LC_ALL=en_US.UTF-8 \
     RADIANT_DIR=/opt/lattice/radiant/2024.2 \
     LM_LICENSE_FILE=/opt/lattice/license.dat
-ENV PATH="${RADIANT_DIR}/bin/lin64:${PATH}"
+ENV PATH="/opt/axon-peripheral-sdk/bin:${RADIANT_DIR}/bin/lin64:${PATH}"
 
 # Base toolchain + locale + Radiant runtime deps + Verilator/iverilog build deps
 # in a single layer. Radiant runtime deps mirror electronics-infra/playbook.yml
@@ -41,12 +46,14 @@ RUN set -eux; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
-# Lattice Radiant install.
+# Lattice Radiant install. Install path is ${RADIANT_DIR}
+# (=/opt/lattice/radiant/${RADIANT_VERSION}) so the version stamp lives in the
+# path — matches axon-peripheral-sdk's expected layout.
 RUN set -eux; \
-    curl -fL "https://files.latticesemi.com/Radiant/${RADIANT_VERSION}/2024.2.0.3_Radiant_linux2.zip" -o /tmp/radiant.zip; \
+    curl -fL "https://files.latticesemi.com/Radiant/${RADIANT_VERSION}/${RADIANT_BUILD}_Radiant_lin.zip" -o /tmp/radiant.zip; \
     unzip -q /tmp/radiant.zip -d /tmp/radiant; \
-    mkdir -p /opt/lattice; \
-    /tmp/radiant/2024.2.0.3_Radiant_lin.run --verbose --console --prefix /opt/lattice/radiant; \
+    mkdir -p "${RADIANT_DIR%/*}"; \
+    /tmp/radiant/${RADIANT_BUILD}_Radiant_lin.run --verbose --console --prefix "${RADIANT_DIR}"; \
     rm -rf /tmp/radiant /tmp/radiant.zip; \
     rm -rf "${RADIANT_DIR}/ispfpga/ap"*; \
     rm -rf "${RADIANT_DIR}/ispfpga/sa6t00"
@@ -65,20 +72,23 @@ RUN set -eux; \
     rm -rf /tmp/verilator
 
 # axon-peripheral-sdk install from the Science apt repo (jammy channel),
-# with sdk/*.deb local override for unreleased SDKs. 
+# with sdk/*.deb local override for unreleased SDKs (same pattern as
+# driver.Dockerfile). When sdk/ has a .deb the apt repo isn't touched, so
+# unpublished or pre-release builds don't require a working repo.
 ARG AXON_SDK_VERSION=0.1.0
 COPY keys/science-repo-public.asc /usr/share/keyrings/scifi-repo-science-public.asc
 COPY sdk/ /tmp/sdk-staging/
 USER root
 RUN set -eux; \
-    apt-get update && apt-get install -y --no-install-recommends ca-certificates; \
-    echo "deb [signed-by=/usr/share/keyrings/scifi-repo-science-public.asc] https://pub-879bfa29e67b4cd6b0c78b0d4cc3aa59.r2.dev/scifi jammy main" > /etc/apt/sources.list.d/repo-science.list; \
     apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates; \
     if ls /tmp/sdk-staging/axon-peripheral-sdk*.deb >/dev/null 2>&1; then \
         echo "==> Using local SDK .deb from sdk/"; \
         apt-get install -y --no-install-recommends /tmp/sdk-staging/axon-peripheral-sdk*.deb; \
     else \
         echo "==> Installing axon-peripheral-sdk=${AXON_SDK_VERSION} from Science apt repo (jammy)"; \
+        echo "deb [signed-by=/usr/share/keyrings/scifi-repo-science-public.asc] https://pub-879bfa29e67b4cd6b0c78b0d4cc3aa59.r2.dev/scifi jammy main" > /etc/apt/sources.list.d/repo-science.list; \
+        apt-get update; \
         apt-get install -y --no-install-recommends axon-peripheral-sdk="${AXON_SDK_VERSION}"; \
     fi; \
     rm -rf /var/lib/apt/lists/* /tmp/sdk-staging
@@ -89,7 +99,7 @@ RUN set -eux; \
 # "Add user" task (users, sudo, dialout).
 RUN set -eux; \
     groupadd -f --gid "${HOST_UID}" dev || true; \
-    useradd -m -u "${HOST_UID}" -s /bin/bash -G sudo,dialout dev; \
+    useradd -m -u "${HOST_UID}" -g dev -s /bin/bash -G sudo,dialout dev; \
     echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev; \
     chmod 0440 /etc/sudoers.d/dev
 

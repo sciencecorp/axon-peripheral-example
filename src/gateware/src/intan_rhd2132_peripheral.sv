@@ -2,7 +2,8 @@
 
 // intan_rhd2132_peripheral_top
 // ----------------------
-// Starter user peripheral for the axon-peripheral-sdk template. Demonstrates the SDK peripheral contract:
+// Starter user peripheral for the axon-peripheral-sdk template
+//Demonstrates the SDK peripheral contract:
 //
 //   Required ports (codegen wires these by name):
 //     clk          — main clock (80 MHz on via-devkit; 320 MHz PLL output
