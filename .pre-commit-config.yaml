@@ -1,0 +1,14 @@
+repos:
+  # Security - check for hardcoded secrets and API keys
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+        exclude: (\.md$|\.json$|keys/|\.h5$)
+
+  # Security - detect committed private keys
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key
