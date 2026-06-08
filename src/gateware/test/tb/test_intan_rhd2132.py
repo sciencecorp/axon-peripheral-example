@@ -5,7 +5,7 @@ receives. Replace the assertions in ``test_loopback`` and ``test_random``
 with peripheral-specific checks as you build out your RTL.
 
 # CUSTOMIZE: this file is a starter, NOT auto-regenerated. Hand-edits are
-# expected and preserved by ``axon-peripheral-sdk regenerate``.
+# expected and preserved by ``axon-peripheral-sdk generate``.
 """
 from __future__ import annotations
 
@@ -23,7 +23,10 @@ from cocotbext.axi import (
     AxiStreamSource,
 )
 
-from axon_peripheral_sdk.profiles.paths import resolve_install_path
+from axon_peripheral_sdk.profiles.paths import (
+    framework_sv_sources,
+    resolve_install_path,
+)
 from axon_peripheral_sdk.sim.cocotb_runner import cocotb_pytest_runner
 from axon_peripheral_sdk.sim.frames import generate_packet, parse_packet
 
@@ -124,15 +127,18 @@ def test_runner(testcase: str) -> None:
 
     # CUSTOMIZE: edit ``sources`` to add additional SV files. The list below
     # is seeded from ``peripheral.yaml`` at codegen time, but hand-edits here
-    # are preserved across ``axon-peripheral-sdk regenerate``.
+    # are preserved across ``axon-peripheral-sdk generate``.
     """
     sources = [
+        # SDK framework SV (axi4_stream_interface) the peripheral + tb ports
+        # bind to — resolved from the repo (dev) or the staged .deb assets.
+        *framework_sv_sources(),
         os.path.join(_PROJECT_ROOT, "src/intan_rhd2132_peripheral.sv"),
         os.path.join(_PROJECT_ROOT, "test", "tb", "intan_rhd2132_tb.sv"),
     ]
     cocotb_pytest_runner(
         sources=sources,
         toplevel="intan_rhd2132_tb",
-        module=__name__,
-        testcase=testcase,
+        test_module=__name__,
+        testcase=[testcase],
     )

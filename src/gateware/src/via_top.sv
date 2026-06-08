@@ -1,13 +1,13 @@
-// AUTO-GENERATED — checksum: 97ef77408011d9d13e78499227200221ac3cdc299d02020491933161b50f275c
+// AUTO-GENERATED — checksum: 3dde5d0924a9b9573dc52245bd0570f51283c7a0ebdd285c6e1b52944061341a
 /*
  * Science Corporation — Axon Peripheral SDK
  * via_top.sv — Generated from peripheral.yaml by axon-peripheral-sdk codegen.
  *
  * You can hand-edit this file. The `// AUTO-GENERATED — checksum: <sha>` line
- * at the top is the file's fingerprint: it lets `axon-peripheral-sdk regenerate`
+ * at the top is the file's fingerprint: it lets `axon-peripheral-sdk generate`
  * notice that you've modified the file and refuse to overwrite your edits.
  * If you want a fresh re-emit (discarding your hand-edits), pass
- * `--force-regenerate` to acknowledge the loss.
+ * `--force` to acknowledge the loss.
  *
  * The body below mirrors the board reference top-level external pin list (clock + IR TX +
  * nRF SPI bridge + LDO enable) and wires 1 user peripheral into the
@@ -52,21 +52,24 @@ module via_top (
     // ------------------------------------------------------------------------
     // Clocks, reset, PLL — board clocks, reset, PLL.
     // ------------------------------------------------------------------------
-    localparam unsigned INPUT_CLK_FREQ = 48_000_000;
-    localparam unsigned DDR_CLK_FREQ   = 160_000_000;
-    localparam unsigned SDR_CLK_FREQ   = 80_000_000;
-    localparam unsigned SYS_CLK_FREQ   = DDR_CLK_FREQ / 4;
+    localparam unsigned INPUT_CLK_FREQ = 48_000_000;   // ext_xo_i board oscillator
+    localparam unsigned CLK0_FREQ      = 160_000_000;  // clk_gen PLL output (clk0)
+    localparam unsigned SDR_CLK_FREQ   = 80_000_000;   // clksdr (serdes TX)
+    localparam unsigned CLKMC_FREQ     = CLK0_FREQ / 4;  // clkmc (SoC + peripherals, 40 MHz)
 
-    logic clkmc, clk320, clk160, clksdr, pll_locked;
+    logic clkmc, clksdr, pll_locked;
     logic rst, clear_counter;
     logic [4:0] reset_count;
     logic [1:0] rst_sync;
 
-    clk_gen #(.PLL_CLK_FREQ(DDR_CLK_FREQ)) u_clk_gen (
+    // via_top only uses clkmc (SoC/peripherals) and clksdr (serdes TX). clk_gen's
+    // clk0 (PLL CLKOP) / clk1 (edge clock) are internal to the clock tree and
+    // left unconnected here.
+    clk_gen #(.PLL_CLK_FREQ(CLK0_FREQ)) u_clk_gen (
         .clki  (ext_xo_i),
         .lock  (pll_locked),
-        .clk320(clk320),
-        .clk160(clk160),
+        .clk0  (),
+        .clk1  (),
         .clksdr(clksdr),
         .clkmc (clkmc)
     );
@@ -163,7 +166,7 @@ module via_top (
         .USER_ENABLE  (USER_ENABLE),
         .USER_WIDTH   (USER_WIDTH),
         .SDR_CLK_FREQ (SDR_CLK_FREQ),
-        .REF_CLK_FREQ (SYS_CLK_FREQ)
+        .REF_CLK_FREQ (CLKMC_FREQ)
     ) u_transport (
         .clk_mc       (clkmc),
         .clk_sdr      (clksdr),

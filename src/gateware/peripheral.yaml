@@ -2,26 +2,24 @@ schema_version: 1
 target_profile: via-devkit
 project:
   name: gateware
-  description: ""
+  description: ''
 build:
-  radiant_version: "2024.2"
+  radiant_version: '2024.2'
 peripherals:
-  - name: intan_rhd2132
-    dev_peripheral_id: 0xF001
-    description: ""
-    type: record
-    vendor: ""
-    fpga:
-      module: intan_rhd2132_peripheral_top
-      sources:
-        - src/intan_rhd2132_peripheral.sv
-      constraints:
-        sdc: []
-        pdc: []
-      io: []
-    api:
-      msg_types: []
-    verification:
-      cocotb_tests:
-        - test/tb/test_intan_rhd2132.py
-      sv_tests: []
+- name: intan_rhd2132
+  type: record
+  fpga:
+    module: intan_rhd2132_peripheral_top
+    sources:
+    - src/intan_rhd2132_peripheral.sv
+    constraints:
+      sdc: []
+      pdc: []
+    io: []
+  api:
+    msg_types: []
+  verification:
+    cocotb_tests:
+    - test/tb/test_intan_rhd2132.py
+    sv_tests: []
+  dev_peripheral_id: 0xf001

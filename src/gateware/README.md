@@ -18,8 +18,8 @@ wiring, build, simulation, and deploy.
 ├── src/
 │   ├── via_top.sv           # AUTO-GENERATED top wrapper (checked in)
 │   ├── scir_sdk.rdf         # AUTO-GENERATED Radiant project (checked in)
-│   ├── user.pdc             # Per-peripheral @AUTO pin blocks + your board pins
-│   ├── user.sdc             # Per-peripheral @AUTO timing blocks + your board timing
+│   ├── scir_sdk.pdc         # Framework pin constraints + your board pins (append below the marker)
+│   ├── scir_sdk.sdc         # Framework timing constraints + your board timing (append below the marker)
 │   ├── intan_rhd2132_peripheral.sv
 │   └── ...                  # Your peripheral SystemVerilog
 ├── test/
@@ -48,9 +48,10 @@ synapsectl peripherals gateware generate
 `generate` allocates any missing `dev_peripheral_id`, scaffolds the missing
 per-peripheral stubs (`src/<name>_peripheral.sv`, `test/tb/<name>_tb.sv`,
 `test/tb/test_<name>.py` — existing files are never overwritten), re-emits the
-derived files (`src/via_top.sv`, `src/scir_sdk.rdf`, and the `@AUTO` blocks in
-`src/user.pdc` / `src/user.sdc`), and validates the project. A single
-`generate` covers id allocation, scaffolding, codegen, and validation.
+derived files (`src/via_top.sv`, `src/scir_sdk.rdf`, and the framework region of
+`src/scir_sdk.pdc` / `src/scir_sdk.sdc` — your appended constraints are
+preserved), and validates the project. A single `generate` covers id
+allocation, scaffolding, codegen, and validation.
 
 ## Peripherals
 
@@ -59,7 +60,7 @@ derived files (`src/via_top.sv`, `src/scir_sdk.rdf`, and the `@AUTO` blocks in
 ## Build
 
 ```
-synapsectl peripherals gateware build --pdc devkit
+synapsectl peripherals gateware build
 ```
 
 `build` re-emits the derived files from `peripheral.yaml`, validates the
@@ -68,7 +69,7 @@ project, then invokes Radiant to produce a bitstream under `build/`.
 Other commands:
 
 - `synapsectl peripherals gateware generate` — re-emit `via_top.sv` +
-  `scir_sdk.rdf` (and rewrite the `@AUTO` blocks) without invoking Radiant.
+  `scir_sdk.rdf` (and the framework region of `scir_sdk.{pdc,sdc}`) without invoking Radiant.
   Hand-edits to either file are supported: the checksum header is a safety net
   that lets `generate` notice your edits and refuse to overwrite them by
   default. Pass `--force` to discard hand-edits and re-emit from the manifest,
@@ -137,18 +138,17 @@ both reject an explicit id outside the window.
 
 ## Constraint tiers
 
-The SDK splits constraints into two tiers:
+All constraints live in two mixed-ownership files, `src/scir_sdk.pdc`
+(physical/pins) and `src/scir_sdk.sdc` (timing). Each file has two regions:
 
-- **`src/scir_sdk.pdc` / `src/scir_sdk.sdc`** — board-level constraints
-  (clocks, board pins, top-level timing). User-owned, byte-identical
-  copies of the profile seed at project-creation time. The codegen never
-  touches these after `synapsectl peripherals gateware new`.
-- **`src/user.pdc` / `src/user.sdc`** — per-peripheral constraints. The
-  codegen rewrites the `@AUTO <name>` blocks in place from
-  `peripheral.yaml` `fpga.io[]` and `fpga.constraints.{pdc,sdc}[]`; edits
-  inside an `@AUTO` block are blown away on the next `generate`. **Free-form
-  lines outside any `@AUTO` block are preserved verbatim** — that's where
-  you put hand-authored helpers (LDC-set clocks, pin overrides, etc.).
+- A **framework region**, delimited by sentinel markers
+  (`# >>> AXON PERIPHERAL SDK FRAMEWORK CONSTRAINTS ... >>>` …
+  `# <<< AXON PERIPHERAL SDK FRAMEWORK CONSTRAINTS <<<`). This holds the
+  board-level clocks and pins and is **re-emitted on every `generate`** from
+  the product seed. Do not edit it — your edits there are overwritten.
+- A **user-append region**, everything below the end marker. Put your own
+  peripheral pin/timing constraints here; `generate` preserves this region
+  verbatim across runs.
 
 ## Modification check
 
@@ -167,9 +167,11 @@ the manifest. `--force` semantics:
   checksum.
 - Update the checksum header to match the freshly-emitted body so the
   next `generate` run starts from a clean slate.
-- The `@AUTO` blocks in `.pdc`/`.sdc` files are rewritten in place
-  regardless of `--force`; hand-edits inside an `@AUTO` block are always
-  discarded.
+
+`--force` applies only to the checksummed files (`via_top.sv`, `scir_sdk.rdf`).
+The framework region of `scir_sdk.{pdc,sdc}` is re-emitted on every `generate`
+regardless of `--force` (it carries no checksum); your user-append region below
+the end marker is always preserved.
 
 ## Customizing the on-device .bit name
 
