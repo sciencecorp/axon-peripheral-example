@@ -24,19 +24,18 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # provided" case and break the SDK's license detection.
 ENV PATH="/opt/axon-peripheral-sdk/bin:${RADIANT_DIR}/bin/lin64:${PATH}"
 
-# Base toolchain + locale + Radiant runtime deps + Verilator/iverilog build deps
-# in a single layer. Radiant runtime deps mirror electronics-infra/playbook.yml
-# "Install lattice radiant dependencies"; Verilator deps mirror
-# "Install Verilator & Iverilog dependencies". Omitted by design (out of scope
-# per spec Non-Goals): GtkWave, OSS CAD Suite, PDM, direnv.
+# --- Layer A: base tools + Lattice Radiant runtime deps (STABLE) ---------
+# Download/locale tools plus the GUI/X/Qt/GL libraries Radiant links (even in
+# --console mode); mirrors electronics-infra/playbook.yml "Install lattice
+# radiant dependencies". Kept ABOVE the Radiant install so the expensive
+# Radiant layer depends only on packages that rarely change. The volatile
+# Verilator/Python build deps live in Layer B BELOW the Radiant install, so
+# editing them (e.g. adding libpython3.10) doesn't invalidate the Radiant
+# layer and force a multi-GB re-download.
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         ca-certificates curl unzip gpg git locales gosu sudo tzdata \
-        make autoconf flex bison gperf help2man perl perl-doc \
-        python3.10 python3.10-venv python3-pip \
-        iverilog mold numactl ccache libfl2 libfl-dev \
-        zlib1g zlib1g-dev libgoogle-perftools-dev g++ \
         at-spi2-core libpangocairo-1.0-0 libcairo2-dev pulseaudio libc6 \
         libjpeg-dev libieee1284-3 libusb-0.1-4 lsb-base libnss3 libice6 \
         libgl1-mesa-glx libsm6 libxt6 libxext6 libxrender1 libxi6 libxft2 \
@@ -52,7 +51,8 @@ RUN set -eux; \
 
 # Lattice Radiant install. Install path is ${RADIANT_DIR}
 # (=/opt/lattice/radiant/${RADIANT_VERSION}) so the version stamp lives in the
-# path — matches axon-peripheral-sdk's expected layout.
+# path — matches axon-peripheral-sdk's expected layout. Placed as high as its
+# prerequisites (Layer A) allow so its cache survives Layer B edits below.
 RUN set -eux; \
     curl -fL "https://files.latticesemi.com/Radiant/${RADIANT_VERSION}/${RADIANT_BUILD}_Radiant_lin.zip" -o /tmp/radiant.zip; \
     unzip -q /tmp/radiant.zip -d /tmp/radiant; \
@@ -61,6 +61,20 @@ RUN set -eux; \
     rm -rf /tmp/radiant /tmp/radiant.zip; \
     rm -rf "${RADIANT_DIR}/ispfpga/ap"*; \
     rm -rf "${RADIANT_DIR}/ispfpga/sa6t00"
+
+# --- Layer B: Verilator/iverilog build deps + Python (VOLATILE) ----------
+# Below the Radiant install so changes here (e.g. libpython3.10 for cocotb's
+# embedded interpreter) don't bust the Radiant cache. Verilator deps mirror
+# electronics-infra/playbook.yml "Install Verilator & Iverilog dependencies".
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        make autoconf flex bison gperf help2man perl perl-doc \
+        python3.10 python3.10-venv python3-pip libpython3.10 \
+        iverilog mold numactl ccache libfl2 libfl-dev \
+        zlib1g zlib1g-dev libgoogle-perftools-dev g++; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
 
 # Verilator v5.034 from source. Ubuntu 22.04's packaged Verilator is too old
 # for current axon-peripheral-sdk testbenches.
