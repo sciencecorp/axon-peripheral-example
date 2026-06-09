@@ -16,8 +16,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
     LANGUAGE=en_US:en \
     LC_ALL=en_US.UTF-8 \
-    RADIANT_DIR=/opt/lattice/radiant/2024.2 \
-    LM_LICENSE_FILE=/opt/lattice/license.dat
+    RADIANT_DIR=/opt/lattice/radiant/2024.2
+# LM_LICENSE_FILE is intentionally NOT baked in: the Radiant license is
+# supplied from outside at runtime (synapsectl forwards the host's
+# LM_LICENSE_FILE via -e, and bind-mounts a file license to
+# /opt/lattice/license.dat). Hardcoding it here would mask the "no license
+# provided" case and break the SDK's license detection.
 ENV PATH="/opt/axon-peripheral-sdk/bin:${RADIANT_DIR}/bin/lin64:${PATH}"
 
 # Base toolchain + locale + Radiant runtime deps + Verilator/iverilog build deps
