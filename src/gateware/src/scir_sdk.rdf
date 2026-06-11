@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- AUTO-GENERATED — checksum: 1f1528fa0297cc9bda786d48e1aa2a0aa38a557a7ebeac640e3cab204aaa8179 -->
+<!-- AUTO-GENERATED — checksum: 4e898704a64c80ff0496b09b8430489079ab1b0dd05572be37000b2615e3b4ca -->
 <RadiantProject version="4.2" radiant="2024.1.1.259.1" title="sdk" device="LIFCL-17-9SG72C" performance_grade="9_Low-Power_1.0V" family_int="je5d00" device_int="je5d15" package_int="QFN72" operation_int="COM" speed_int="6" default_implementation="impl_1">
     <Options />
     <Implementation title="impl_1" dir="impl_1" description="impl_1" synthesis="synplify" default_strategy="Strategy1">
@@ -77,4 +77,5 @@
             <Options />
         </Source>
     </Implementation>
+    <Strategy name="Strategy1" file="scir_sdk.sty" />
 </RadiantProject>

@@ -7,9 +7,9 @@ repos:
     hooks:
       - id: detect-secrets
         args: [--baseline, .secrets.baseline]
-        # Exact paths only. Excludes the checked-in *public* PGP key so a key
+        # Exact paths only. Excludes the checked-in *public* PGP keys so a key
         # rotation cannot trip the entropy detector; everything else is scanned.
-        exclude: ^keys/science-repo-public\.asc$
+        exclude: ^keys/(science-repo-public|axonprobes-repo-science-public)\.asc$
 
   # Security - detect committed private keys
   - repo: https://github.com/pre-commit/pre-commit-hooks

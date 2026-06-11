@@ -89,12 +89,12 @@ RUN set -eux; \
     cd /; \
     rm -rf /tmp/verilator
 
-# axon-peripheral-sdk install from the Science apt repo (jammy channel),
+# axon-peripheral-sdk install from the Science apt repo (axonprobes/stable),
 # with sdk/*.deb local override for unreleased SDKs (same pattern as
 # driver.Dockerfile). When sdk/ has a .deb the apt repo isn't touched, so
 # unpublished or pre-release builds don't require a working repo.
-ARG AXON_SDK_VERSION=0.1.0
-COPY keys/science-repo-public.asc /usr/share/keyrings/scifi-repo-science-public.asc
+ARG AXON_SDK_VERSION=1.0.2-1~jammy
+COPY keys/axonprobes-repo-science-public.asc /usr/share/keyrings/axonprobes-repo-science-public.asc
 COPY sdk/ /tmp/sdk-staging/
 USER root
 RUN set -eux; \
@@ -104,8 +104,8 @@ RUN set -eux; \
         echo "==> Using local SDK .deb from sdk/"; \
         apt-get install -y --no-install-recommends /tmp/sdk-staging/axon-peripheral-sdk*.deb; \
     else \
-        echo "==> Installing axon-peripheral-sdk=${AXON_SDK_VERSION} from Science apt repo (jammy)"; \
-        echo "deb [signed-by=/usr/share/keyrings/scifi-repo-science-public.asc] https://pub-879bfa29e67b4cd6b0c78b0d4cc3aa59.r2.dev/scifi jammy main" > /etc/apt/sources.list.d/repo-science.list; \
+        echo "==> Installing axon-peripheral-sdk=${AXON_SDK_VERSION} from Science apt repo (axonprobes/stable)"; \
+        echo "deb [signed-by=/usr/share/keyrings/axonprobes-repo-science-public.asc] https://pub-879bfa29e67b4cd6b0c78b0d4cc3aa59.r2.dev/axonprobes stable main" > /etc/apt/sources.list.d/repo-science.list; \
         apt-get update; \
         apt-get install -y --no-install-recommends axon-peripheral-sdk="${AXON_SDK_VERSION}"; \
     fi; \

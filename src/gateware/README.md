@@ -185,7 +185,7 @@ The synapsectl peripheral build flow stages the FPGA bitstream produced by `syna
 }
 ```
 
-The synapsectl staging step renames the hashed build artifact (`src/gateware/build/bitstreams/sdk_<product>_<pdc>_v<sdk_version>_<git_hash>_<datetime>.bit`) to the basename of `install.gateware_target` when copying it into the `.deb`. On `dpkg -i`, the bitstream installs at the full `install.gateware_target` path on the device.
+The synapsectl staging step renames the hashed build artifact (`src/gateware/build/bitstreams/sdk_<product>_<pdc>_<project_name>_v<sdk_version>_<git_hash>_<datetime>.bit`) to the basename of `install.gateware_target` when copying it into the `.deb`. On `dpkg -i`, the bitstream installs at the full `install.gateware_target` path on the device.
 
 Fallback order if `install.gateware_target` is unset or empty:
 

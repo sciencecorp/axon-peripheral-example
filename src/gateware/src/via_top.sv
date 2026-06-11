@@ -1,4 +1,4 @@
-// AUTO-GENERATED — checksum: 3dde5d0924a9b9573dc52245bd0570f51283c7a0ebdd285c6e1b52944061341a
+// AUTO-GENERATED — checksum: bfa449e7d45fc3486c9d88229535cd110688acd1046f986ac98abe235a4fe827
 /*
  * Science Corporation — Axon Peripheral SDK
  * via_top.sv — Generated from peripheral.yaml by axon-peripheral-sdk codegen.
@@ -45,6 +45,10 @@ module via_top (
     localparam unsigned DEST_WIDTH      = 1;
     localparam unsigned USER_ENABLE     = 1;
     localparam unsigned USER_WIDTH      = 1;
+
+    // localparam GIT_HASH; generated into this project's src/ at build time and
+    // forwarded to the transport so READ_DEVICE_INFO reports the user repo's HEAD.
+    `include "git_hash.sv"
 
     // User peripheral IDs (pinned in peripheral.yaml, must lie in 0xF001..0xFFFE)
     localparam unsigned USER_INTAN_RHD2132_ID = 16'hF001;
@@ -166,7 +170,8 @@ module via_top (
         .USER_ENABLE  (USER_ENABLE),
         .USER_WIDTH   (USER_WIDTH),
         .SDR_CLK_FREQ (SDR_CLK_FREQ),
-        .REF_CLK_FREQ (CLKMC_FREQ)
+        .REF_CLK_FREQ (CLKMC_FREQ),
+        .GIT_HASH     (GIT_HASH)
     ) u_transport (
         .clk_mc       (clkmc),
         .clk_sdr      (clksdr),
