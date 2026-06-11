@@ -1,0 +1,4 @@
+# Never convert line endings on armored GPG keys: a CRLF checkout (Git for
+# Windows autocrlf default) breaks apt's armor detection inside the Docker
+# build, surfacing as NO_PUBKEY when verifying the Science apt repo.
+*.asc -text
