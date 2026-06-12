@@ -84,9 +84,19 @@ def _data_words(payload: bytes) -> list[int]:
     return list(struct.unpack(f"<{len(payload) // 4}I", payload))
 
 
+# Per-channel delay, in samples — must match DELAY in axon_test_source_peripheral.sv.
+DELAY_SAMPLES = 8
+
+
+def _sample16(word: int) -> int:
+    """Interpret a payload word's low 16 bits as a signed sample."""
+    s = word & 0xFFFF
+    return s - 0x10000 if s & 0x8000 else s
+
+
 @cocotb.test()
 async def test_configure_and_stream(dut) -> None:
-    """Configure 4 channels, start, and check the counter ramp across frames."""
+    """Configure 4 channels, start, and check we get well-formed, varying frames."""
     cocotb.start_soon(Clock(dut.clk, CLK_PERIOD_NS, unit="ns").start())
     await _reset(dut)
 
@@ -97,8 +107,8 @@ async def test_configure_and_stream(dut) -> None:
     await _send(source, MSG_CONFIGURE, _configure_payload(channel_count, 20))
     await _send(source, MSG_START_STREAM, b"")
 
-    expected = None
-    for _ in range(5):
+    ch0_samples = []
+    for _ in range(40):
         frame = await sink.recv()
         msg_type, payload = parse_packet(list(frame.tdata))
         assert msg_type == MSG_DATA_FRAME, f"unexpected msg_type {msg_type:#06x}"
@@ -107,16 +117,44 @@ async def test_configure_and_stream(dut) -> None:
         assert len(words) == channel_count, (
             f"expected {channel_count} words, got {len(words)}"
         )
+        ch0_samples.append(_sample16(words[0]))
 
-        # The payload is a single free-running counter: contiguous and monotonic
-        # within a frame and across frames (low 16 bits are the per-channel sample).
-        if expected is None:
-            expected = words[0] & 0xFFFF
-        for w in words:
-            assert (w & 0xFFFF) == expected, (
-                f"ramp break: got {w & 0xFFFF:#06x}, expected {expected:#06x}"
-            )
-            expected = (expected + 1) & 0xFFFF
+    # The signal is a real LFP+spike synth, not a constant — channel 0 must move.
+    assert len(set(ch0_samples)) > 1, f"channel 0 never varied: {ch0_samples}"
+
+
+@cocotb.test()
+async def test_per_channel_delay(dut) -> None:
+    """Each channel is the same master signal delayed by DELAY_SAMPLES per channel.
+
+    The synth is deterministic and one master sample is produced per frame, so
+    channel 1 at frame f equals channel 0 at frame (f - DELAY_SAMPLES).
+    """
+    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD_NS, unit="ns").start())
+    await _reset(dut)
+
+    source = _make_source(dut)
+    sink = _make_sink(dut)
+
+    channel_count = 4
+    await _send(source, MSG_CONFIGURE, _configure_payload(channel_count, 20))
+    await _send(source, MSG_START_STREAM, b"")
+
+    frames = []
+    for _ in range(60):
+        frame = await sink.recv()
+        _, payload = parse_packet(list(frame.tdata))
+        frames.append([_sample16(w) for w in _data_words(payload)])
+
+    # ch1[f] should equal ch0[f - DELAY_SAMPLES] once the delay line has filled.
+    checked = 0
+    for f in range(DELAY_SAMPLES, len(frames)):
+        assert frames[f][1] == frames[f - DELAY_SAMPLES][0], (
+            f"delay mismatch at frame {f}: ch1={frames[f][1]} != "
+            f"ch0[f-{DELAY_SAMPLES}]={frames[f - DELAY_SAMPLES][0]}"
+        )
+        checked += 1
+    assert checked > 0
 
 
 @cocotb.test()
@@ -162,7 +200,12 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 @pytest.mark.parametrize(
     "testcase",
-    ["test_configure_and_stream", "test_stop_halts_stream", "test_no_stream_before_start"],
+    [
+        "test_configure_and_stream",
+        "test_per_channel_delay",
+        "test_stop_halts_stream",
+        "test_no_stream_before_start",
+    ],
 )
 def test_runner(testcase: str) -> None:
     """pytest entrypoint — runs the cocotb suite under Questa/Verilator.
