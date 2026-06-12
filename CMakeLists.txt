@@ -40,9 +40,9 @@ message(STATUS "SCIFI_PERIPHERAL_SDK_LIB: ${SCIFI_PERIPHERAL_SDK_LIB}")
 # intan_rhd2132_plugin.cpp — it contains the SCIFI_PLUGIN_REGISTER(...) block.
 # Everything else is the verbatim Intan implementation, copied from headstage.
 set(PLUGIN_SOURCES
-  src/intan_rhd2132_peripheral.cpp
-  src/intan_rhd2132_registers.cpp
-  src/intan_rhd2132_plugin.cpp
+  src/driver/intan_rhd2132_peripheral.cpp
+  src/driver/intan_rhd2132_registers.cpp
+  src/driver/intan_rhd2132_plugin.cpp
 )
 
 add_library(scifi-intan-rhd2132 SHARED ${PLUGIN_SOURCES})
@@ -62,7 +62,7 @@ set_target_properties(scifi-intan-rhd2132 PROPERTIES
 )
 
 target_include_directories(scifi-intan-rhd2132 PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/driver
 )
 
 target_compile_options(scifi-intan-rhd2132 PRIVATE -Wall -Wno-psabi)

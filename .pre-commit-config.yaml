@@ -1,0 +1,18 @@
+repos:
+  # Security - check for hardcoded secrets and API keys.
+  # Known false positives (e.g. the vcpkg builtin-baseline git SHA in
+  # vcpkg.json) are recorded in .secrets.baseline, NOT excluded by glob.
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+        # Exact paths only. Excludes the checked-in *public* PGP keys so a key
+        # rotation cannot trip the entropy detector; everything else is scanned.
+        exclude: ^keys/(science-repo-public|axonprobes-repo-science-public)\.asc$
+
+  # Security - detect committed private keys
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key
