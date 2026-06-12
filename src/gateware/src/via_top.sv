@@ -135,7 +135,15 @@ module via_top (
     encap u_encap_axon_test_source (
         .clk         (clkmc),
         .rstn        (~rst_sync[1]),
-        .periph_addr (central_address | USER_AXON_TEST_SOURCE_ID),
+        // Stamp the OUTBOUND src address as (controller base | peripheral slot).
+        // The host (peripheral_manager) addresses peripherals as
+        // `controller | (enumeration_slot = i+1)` and subscribes to that, and
+        // PERIF_ADDR_NUM_RESERVED_BITS=8 makes only the low byte the slot. Dev
+        // ids are allocated so their low byte == slot (0xF001 -> slot 1), so we
+        // mask to the low 8 bits. The SDK template's `central_address |
+        // <full dev id>` stamped 0xF101 instead of 0x101, so the host's RX
+        // filter never matched and the read loop saw no data. (SDK codegen bug.)
+        .periph_addr (central_address | (USER_AXON_TEST_SOURCE_ID & 32'h0000_00FF)),
         .dest_addr   (32'h0000_0000),
         .sink_axis_if(axon_test_source_src_axis_if),
         .src_axis_if (axon_test_source_transport_s_if)
