@@ -2,13 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
-#include <map>
-#include <optional>
 #include <string>
 #include <vector>
-
-#include <zmq.hpp>
 
 #include "spdlog/spdlog.h"
 
@@ -114,59 +109,6 @@ scifi::Status AxonTestSourcePeripheral::start_recording_impl(uint32_t sample_rat
     unsubscribe_persistent(DATA_FRAME);
     return ret;
   }
-
-  // ----------------------------------------------------------------------
-  // [DIAG] TEMPORARY instrumentation — remove once the data path works.
-  //
-  // Sniff *all* inbound Axon traffic for a short window right after
-  // START_STREAM and log every (src_addr, type, payload_words). This runs
-  // before read_frames starts (the SDK only flips to Recording after this
-  // returns OK), and uses an isolated aux channel so it doesn't disturb the
-  // default channel's persistent DATA_FRAME subscription.
-  //
-  // What the output tells us:
-  //   - no packets at all          -> gateware isn't emitting (RX/START or TX)
-  //   - src == this->id, type 0x56 -> emit + address OK; bug is in the read loop
-  //   - src != this->id (or type)  -> addressing/encap mismatch; value shown
-  // ----------------------------------------------------------------------
-  {
-    spdlog::warn(
-        "AxonTestSource[DIAG]: this peripheral id/addr = 0x{:x}; default channel "
-        "filters on (that addr, DATA_FRAME=0x{:x})",
-        static_cast<uint32_t>(this->id), DATA_FRAME);
-
-    scifi::plugin::RxChannel sniff = open_rx_channel();
-    scifi::plugin::ScopedRxSubscription guard = sniff.subscribe(DATA_FRAME, 100);
-    if (guard.is_valid()) {
-      // Widen to a catch-all: receive every inbound packet, any src/type.
-      sniff.raw_socket().set(zmq::sockopt::subscribe, "");
-    } else {
-      spdlog::warn("AxonTestSource[DIAG]: could not open sniff subscription");
-    }
-
-    std::map<uint64_t, int> seen;  // key = (src_addr << 32) | type
-    int total = 0;
-    for (int i = 0; i < 30; ++i) {  // ~up to 3s if silent; fast if traffic flows
-      std::optional<axon::RxPacket> pkt = sniff.receive_packet();
-      if (!pkt) {
-        continue;
-      }
-      ++total;
-      const uint64_t key =
-          (static_cast<uint64_t>(pkt->src_addr()) << 32) | static_cast<uint64_t>(pkt->type());
-      if (seen[key]++ < 2) {
-        spdlog::warn("AxonTestSource[DIAG]: rx src=0x{:x} type=0x{:x} payload_words={}",
-                     pkt->src_addr(), pkt->type(), pkt->payload_size());
-      }
-    }
-    spdlog::warn("AxonTestSource[DIAG]: sniff window done: {} packets, {} distinct (src,type)",
-                 total, seen.size());
-    for (const auto& [key, count] : seen) {
-      spdlog::warn("AxonTestSource[DIAG]:   src=0x{:x} type=0x{:x} -> {} pkts",
-                   static_cast<uint32_t>(key >> 32),
-                   static_cast<uint32_t>(key & 0xFFFFFFFFu), count);
-    }
-  }  // sniff + guard destruct here: unsubscribe + disconnect the aux channel
 
   spdlog::info("AxonTestSource: streaming {} channels at {} Hz", channels_enabled_,
                actual_sample_rate);
