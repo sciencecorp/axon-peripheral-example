@@ -84,8 +84,9 @@ def _data_words(payload: bytes) -> list[int]:
     return list(struct.unpack(f"<{len(payload) // 4}I", payload))
 
 
-# Per-channel delay, in samples — must match DELAY in axon_test_source_peripheral.sv.
-DELAY_SAMPLES = 8
+# Per-channel delay offsets (samples) — must match DELAY_LUT in
+# axon_test_source_peripheral.sv. Channel 0 is the live reference (offset 0).
+DELAY_LUT = [0, 107, 188, 3, 210, 212, 206, 77]
 
 
 def _sample16(word: int) -> int:
@@ -125,10 +126,11 @@ async def test_configure_and_stream(dut) -> None:
 
 @cocotb.test()
 async def test_per_channel_delay(dut) -> None:
-    """Each channel is the same master signal delayed by DELAY_SAMPLES per channel.
+    """Each channel is the same master signal delayed by its DELAY_LUT offset.
 
-    The synth is deterministic and one master sample is produced per frame, so
-    channel 1 at frame f equals channel 0 at frame (f - DELAY_SAMPLES).
+    The synth (LFP + spikes + noise) is deterministic and one master sample is
+    produced per frame, so channel c at frame f equals channel 0 at frame
+    (f - DELAY_LUT[c]). Offsets are pseudo-random, not linear in c.
     """
     cocotb.start_soon(Clock(dut.clk, CLK_PERIOD_NS, unit="ns").start())
     await _reset(dut)
@@ -136,25 +138,32 @@ async def test_per_channel_delay(dut) -> None:
     source = _make_source(dut)
     sink = _make_sink(dut)
 
-    channel_count = 4
+    channels = [1, 2, 3]                       # check these against channel 0
+    channel_count = max(channels) + 1
+    max_off = max(DELAY_LUT[c] for c in channels)
+
     await _send(source, MSG_CONFIGURE, _configure_payload(channel_count, 20))
     await _send(source, MSG_START_STREAM, b"")
 
     frames = []
-    for _ in range(60):
+    for _ in range(max_off + 40):              # enough for the deepest offset to fill
         frame = await sink.recv()
         _, payload = parse_packet(list(frame.tdata))
         frames.append([_sample16(w) for w in _data_words(payload)])
 
-    # ch1[f] should equal ch0[f - DELAY_SAMPLES] once the delay line has filled.
     checked = 0
-    for f in range(DELAY_SAMPLES, len(frames)):
-        assert frames[f][1] == frames[f - DELAY_SAMPLES][0], (
-            f"delay mismatch at frame {f}: ch1={frames[f][1]} != "
-            f"ch0[f-{DELAY_SAMPLES}]={frames[f - DELAY_SAMPLES][0]}"
-        )
-        checked += 1
+    for c in channels:
+        off = DELAY_LUT[c]
+        for f in range(off, len(frames)):
+            assert frames[f][c] == frames[f - off][0], (
+                f"delay mismatch ch{c} (offset {off}) frame {f}: "
+                f"{frames[f][c]} != ch0[f-{off}]={frames[f - off][0]}"
+            )
+            checked += 1
     assert checked > 0
+
+    # Offsets must not be a linear ramp (the whole point of this change).
+    assert DELAY_LUT[1:4] != [DELAY_LUT[1] * i for i in range(1, 4)]
 
 
 @cocotb.test()
