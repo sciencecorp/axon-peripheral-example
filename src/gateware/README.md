@@ -20,7 +20,7 @@ wiring, build, simulation, and deploy.
 │   ├── scir_sdk.rdf         # AUTO-GENERATED Radiant project (checked in)
 │   ├── scir_sdk.pdc         # Framework pin constraints + your board pins (append below the marker)
 │   ├── scir_sdk.sdc         # Framework timing constraints + your board timing (append below the marker)
-│   ├── intan_rhd2132_peripheral.sv
+│   ├── axon_test_source_peripheral.sv
 │   └── ...                  # Your peripheral SystemVerilog
 ├── test/
 │   ├── tb/                  # Per-peripheral testbenches + cocotb tests
@@ -55,7 +55,7 @@ allocation, scaffolding, codegen, and validation.
 
 ## Peripherals
 
-- `intan_rhd2132`
+- `axon_test_source`
 
 ## Build
 
@@ -180,8 +180,8 @@ The synapsectl peripheral build flow stages the FPGA bitstream produced by `syna
 ```json
 "install": {
     "type": "shared_library",
-    "target": "/usr/lib/scifi/plugins/intan_rhd2132.so",
-    "gateware_target": "/usr/lib/scifi/gateware/intan_rhd2132.bit"
+    "target": "/usr/lib/scifi/plugins/axon_test_source.so",
+    "gateware_target": "/usr/lib/scifi/gateware/axon_test_source.bit"
 }
 ```
 
@@ -189,5 +189,5 @@ The synapsectl staging step renames the hashed build artifact (`src/gateware/bui
 
 Fallback order if `install.gateware_target` is unset or empty:
 
-1. Strip `.so` from the basename of `install.target` and append `.bit` (e.g. `intan_rhd2132.so` → `intan_rhd2132.bit`).
+1. Strip `.so` from the basename of `install.target` and append `.bit` (e.g. `axon_test_source.so` → `axon_test_source.bit`).
 2. If `install.target` is also unset, use `<manifest.name>.bit`.

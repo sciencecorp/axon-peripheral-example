@@ -1,8 +1,9 @@
-"""cocotb tests for the intan_rhd2132 peripheral.
+"""cocotb tests for the axon_test_source peripheral.
 
-Day-1 loopback verification — the template DUT echoes every word it
-receives. Replace the assertions in ``test_loopback`` and ``test_random``
-with peripheral-specific checks as you build out your RTL.
+The DUT is configured with a channel count and a per-frame sample period, then
+streams DATA_FRAME packets of incrementing-counter payload — one frame per
+period — until STOP_STREAM. These tests drive the command frames and check the
+emitted data ramp.
 
 # CUSTOMIZE: this file is a starter, NOT auto-regenerated. Hand-edits are
 # expected and preserved by ``axon-peripheral-sdk generate``.
@@ -10,12 +11,12 @@ with peripheral-specific checks as you build out your RTL.
 from __future__ import annotations
 
 import os
+import struct
 
 import cocotb
 import pytest
-import vsc
 from cocotb.clock import Clock
-from cocotb.triggers import Timer
+from cocotb.triggers import ClockCycles, Timer
 from cocotbext.axi import (
     AxiStreamBus,
     AxiStreamFrame,
@@ -32,6 +33,12 @@ from axon_peripheral_sdk.sim.frames import generate_packet, parse_packet
 
 
 CLK_PERIOD_NS = 12.5
+
+# Message-type opcodes — must match axon_test_source_peripheral.sv.
+MSG_CONFIGURE = 0x0052
+MSG_START_STREAM = 0x0054
+MSG_STOP_STREAM = 0x0055
+MSG_DATA_FRAME = 0x0056
 
 
 async def _reset(dut) -> None:
@@ -61,67 +68,102 @@ def _make_sink(dut) -> AxiStreamSink:
     )
 
 
-@cocotb.test()
-async def test_loopback(dut) -> None:
-    """Day-1 loopback: send one frame, expect the same frame back."""
-    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD_NS, unit="ns").start())
-    await _reset(dut)
+def _configure_payload(channel_count: int, sample_period: int) -> bytes:
+    """CONFIGURE payload: word0 = channel_count, word1 = sample_period (LE)."""
+    return struct.pack("<II", channel_count, sample_period)
 
-    source = _make_source(dut)
-    sink = _make_sink(dut)
 
-    # CUSTOMIZE: replace with the request the real peripheral expects.
-    payload = b"\xDE\xAD\xBE\xEF"
-    beats = generate_packet(msg_type=0x0001, payload=payload)
+async def _send(source: AxiStreamSource, msg_type: int, payload: bytes) -> None:
+    beats = generate_packet(msg_type=msg_type, payload=payload)
     await source.send(AxiStreamFrame(tdata=beats))
 
-    reply = await sink.recv()
-    msg_type, reply_payload = parse_packet(list(reply.tdata))
 
-    # Day-1 loopback DUT does not rewrite msg_type — it echoes the request
-    # word-for-word.
-    assert msg_type == 0x0001, f"unexpected msg_type {msg_type:#06x}"
-    assert reply_payload == b"\xDE\xAD\xBE\xEF", (
-        f"payload mismatch: got {reply_payload!r}"
-    )
-
-
-@vsc.randobj
-class _RandPayload:
-    def __init__(self):
-        super().__init__()
-        self.p0 = vsc.rand_bit_t(32)
+def _data_words(payload: bytes) -> list[int]:
+    """Unpack a DATA_FRAME payload into its 32-bit words."""
+    assert len(payload) % 4 == 0, f"payload not word-aligned: {len(payload)} bytes"
+    return list(struct.unpack(f"<{len(payload) // 4}I", payload))
 
 
 @cocotb.test()
-async def test_random(dut) -> None:
-    """Smoke-fuzz the loopback with pyvsc-randomised payloads."""
+async def test_configure_and_stream(dut) -> None:
+    """Configure 4 channels, start, and check the counter ramp across frames."""
     cocotb.start_soon(Clock(dut.clk, CLK_PERIOD_NS, unit="ns").start())
     await _reset(dut)
 
     source = _make_source(dut)
     sink = _make_sink(dut)
 
-    rng = _RandPayload()
-    for _ in range(8):
-        rng.randomize()
-        payload = int(rng.p0).to_bytes(4, "little")
-        beats = generate_packet(msg_type=0x0001, payload=payload)
-        await source.send(AxiStreamFrame(tdata=beats))
+    channel_count = 4
+    await _send(source, MSG_CONFIGURE, _configure_payload(channel_count, 20))
+    await _send(source, MSG_START_STREAM, b"")
 
-        reply = await sink.recv()
-        msg_type, reply_payload = parse_packet(list(reply.tdata))
+    expected = None
+    for _ in range(5):
+        frame = await sink.recv()
+        msg_type, payload = parse_packet(list(frame.tdata))
+        assert msg_type == MSG_DATA_FRAME, f"unexpected msg_type {msg_type:#06x}"
 
-        assert msg_type == 0x0001, f"unexpected msg_type {msg_type:#06x}"
-        assert reply_payload == payload, (
-            f"payload mismatch: sent {payload!r}, got {reply_payload!r}"
+        words = _data_words(payload)
+        assert len(words) == channel_count, (
+            f"expected {channel_count} words, got {len(words)}"
         )
+
+        # The payload is a single free-running counter: contiguous and monotonic
+        # within a frame and across frames (low 16 bits are the per-channel sample).
+        if expected is None:
+            expected = words[0] & 0xFFFF
+        for w in words:
+            assert (w & 0xFFFF) == expected, (
+                f"ramp break: got {w & 0xFFFF:#06x}, expected {expected:#06x}"
+            )
+            expected = (expected + 1) & 0xFFFF
+
+
+@cocotb.test()
+async def test_stop_halts_stream(dut) -> None:
+    """After STOP_STREAM, no further DATA_FRAME should arrive."""
+    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD_NS, unit="ns").start())
+    await _reset(dut)
+
+    source = _make_source(dut)
+    sink = _make_sink(dut)
+
+    await _send(source, MSG_CONFIGURE, _configure_payload(2, 20))
+    await _send(source, MSG_START_STREAM, b"")
+
+    # Receive at least one frame so we know streaming is live.
+    await sink.recv()
+
+    await _send(source, MSG_STOP_STREAM, b"")
+
+    # Drain whatever was already queued/in-flight, then assert quiet.
+    await ClockCycles(dut.clk, 200)
+    sink.clear()
+    await ClockCycles(dut.clk, 500)
+    assert sink.empty(), "DATA_FRAME received after STOP_STREAM"
+
+
+@cocotb.test()
+async def test_no_stream_before_start(dut) -> None:
+    """CONFIGURE alone (no START_STREAM) must not produce any data."""
+    cocotb.start_soon(Clock(dut.clk, CLK_PERIOD_NS, unit="ns").start())
+    await _reset(dut)
+
+    source = _make_source(dut)
+    sink = _make_sink(dut)
+
+    await _send(source, MSG_CONFIGURE, _configure_payload(8, 20))
+    await ClockCycles(dut.clk, 500)
+    assert sink.empty(), "DATA_FRAME received before START_STREAM"
 
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-@pytest.mark.parametrize("testcase", ["test_loopback", "test_random"])
+@pytest.mark.parametrize(
+    "testcase",
+    ["test_configure_and_stream", "test_stop_halts_stream", "test_no_stream_before_start"],
+)
 def test_runner(testcase: str) -> None:
     """pytest entrypoint — runs the cocotb suite under Questa/Verilator.
 
@@ -133,12 +175,12 @@ def test_runner(testcase: str) -> None:
         # SDK framework SV (axi4_stream_interface) the peripheral + tb ports
         # bind to — resolved from the repo (dev) or the staged .deb assets.
         *framework_sv_sources(),
-        os.path.join(_PROJECT_ROOT, "src/intan_rhd2132_peripheral.sv"),
-        os.path.join(_PROJECT_ROOT, "test", "tb", "intan_rhd2132_tb.sv"),
+        os.path.join(_PROJECT_ROOT, "src/axon_test_source_peripheral.sv"),
+        os.path.join(_PROJECT_ROOT, "test", "tb", "axon_test_source_tb.sv"),
     ]
     cocotb_pytest_runner(
         sources=sources,
-        toplevel="intan_rhd2132_tb",
+        toplevel="axon_test_source_tb",
         test_module=__name__,
         testcase=[testcase],
     )

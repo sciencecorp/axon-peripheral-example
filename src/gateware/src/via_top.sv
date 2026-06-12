@@ -51,7 +51,7 @@ module via_top (
     `include "git_hash.sv"
 
     // User peripheral IDs (pinned in peripheral.yaml, must lie in 0xF001..0xFFFE)
-    localparam unsigned USER_INTAN_RHD2132_ID = 16'hF001;
+    localparam unsigned USER_AXON_TEST_SOURCE_ID = 16'hF001;
 
     // ------------------------------------------------------------------------
     // Clocks, reset, PLL — board clocks, reset, PLL.
@@ -90,7 +90,7 @@ module via_top (
 
     logic [31:0] central_address;
     // ------------------------------------------------------------------------
-    // User peripheral — intan_rhd2132 (module=intan_rhd2132_peripheral_top, id=16'hF001)
+    // User peripheral — axon_test_source (module=axon_test_source_peripheral_top, id=16'hF001)
     // ------------------------------------------------------------------------
 
     // Transport-side interfaces — wider tdest/tid carry the axis_switch
@@ -100,14 +100,14 @@ module via_top (
         .ID_WIDTH  (ID_WIDTH),
         .DEST_WIDTH(DEST_WIDTH + $clog2(M_COUNT + 1)),
         .USER_WIDTH(USER_WIDTH)
-    ) intan_rhd2132_transport_s_if ();
+    ) axon_test_source_transport_s_if ();
 
     axi4_stream_interface #(
         .DATA_WIDTH(DATA_WIDTH),
         .ID_WIDTH  (ID_WIDTH + $clog2(S_COUNT + 1)),
         .DEST_WIDTH(DEST_WIDTH),
         .USER_WIDTH(USER_WIDTH)
-    ) intan_rhd2132_transport_m_if ();
+    ) axon_test_source_transport_m_if ();
 
     // Peripheral-side interfaces — the user peripheral sees these directly
     // on its rx_axis / tx_axis ports (tid=8, tdest=1, tuser=1).
@@ -116,37 +116,37 @@ module via_top (
         .ID_WIDTH  (ID_WIDTH),
         .DEST_WIDTH(DEST_WIDTH),
         .USER_WIDTH(USER_WIDTH)
-    ) intan_rhd2132_src_axis_if ();
+    ) axon_test_source_src_axis_if ();
 
     axi4_stream_interface #(
         .DATA_WIDTH(DATA_WIDTH),
         .ID_WIDTH  (ID_WIDTH),
         .DEST_WIDTH(DEST_WIDTH),
         .USER_WIDTH(USER_WIDTH)
-    ) intan_rhd2132_sink_axis_if ();
+    ) axon_test_source_sink_axis_if ();
 
-    decap u_decap_intan_rhd2132 (
+    decap u_decap_axon_test_source (
         .clk         (clkmc),
         .rstn        (~rst_sync[1]),
-        .sink_axis_if(intan_rhd2132_transport_m_if),
-        .src_axis_if (intan_rhd2132_sink_axis_if)
+        .sink_axis_if(axon_test_source_transport_m_if),
+        .src_axis_if (axon_test_source_sink_axis_if)
     );
 
-    encap u_encap_intan_rhd2132 (
+    encap u_encap_axon_test_source (
         .clk         (clkmc),
         .rstn        (~rst_sync[1]),
-        .periph_addr (central_address | USER_INTAN_RHD2132_ID),
+        .periph_addr (central_address | USER_AXON_TEST_SOURCE_ID),
         .dest_addr   (32'h0000_0000),
-        .sink_axis_if(intan_rhd2132_src_axis_if),
-        .src_axis_if (intan_rhd2132_transport_s_if)
+        .sink_axis_if(axon_test_source_src_axis_if),
+        .src_axis_if (axon_test_source_transport_s_if)
     );
 
-    intan_rhd2132_peripheral_top u_user_intan_rhd2132 (
+    axon_test_source_peripheral_top u_user_axon_test_source (
         .clk         (clkmc),
         .rst         (rst_sync[1]),
-        .periph_addr (central_address | USER_INTAN_RHD2132_ID),
-        .rx_axis     (intan_rhd2132_sink_axis_if),
-        .tx_axis     (intan_rhd2132_src_axis_if)    );
+        .periph_addr (central_address | USER_AXON_TEST_SOURCE_ID),
+        .rx_axis     (axon_test_source_sink_axis_if),
+        .tx_axis     (axon_test_source_src_axis_if)    );
 
     // ------------------------------------------------------------------------
     // Transport — the SDK-shipped bundle that handles framing, the AXI-Stream
@@ -182,23 +182,23 @@ module via_top (
         .nrf_miso_o   (nrf_miso_o),
         .serial_data_o(serial_data_out),
 
-        .s_axis_tdata ({ intan_rhd2132_transport_s_if.tdata }),
-        .s_axis_tvalid({ intan_rhd2132_transport_s_if.tvalid }),
-        .s_axis_tready({ intan_rhd2132_transport_s_if.tready }),
-        .s_axis_tlast ({ intan_rhd2132_transport_s_if.tlast }),
-        .s_axis_tid   ({ intan_rhd2132_transport_s_if.tid }),
-        .s_axis_tdest ({ intan_rhd2132_transport_s_if.tdest }),
-        .s_axis_tuser ({ intan_rhd2132_transport_s_if.tuser }),
+        .s_axis_tdata ({ axon_test_source_transport_s_if.tdata }),
+        .s_axis_tvalid({ axon_test_source_transport_s_if.tvalid }),
+        .s_axis_tready({ axon_test_source_transport_s_if.tready }),
+        .s_axis_tlast ({ axon_test_source_transport_s_if.tlast }),
+        .s_axis_tid   ({ axon_test_source_transport_s_if.tid }),
+        .s_axis_tdest ({ axon_test_source_transport_s_if.tdest }),
+        .s_axis_tuser ({ axon_test_source_transport_s_if.tuser }),
 
-        .m_axis_tdata ({ intan_rhd2132_transport_m_if.tdata }),
-        .m_axis_tvalid({ intan_rhd2132_transport_m_if.tvalid }),
-        .m_axis_tready({ intan_rhd2132_transport_m_if.tready }),
-        .m_axis_tlast ({ intan_rhd2132_transport_m_if.tlast }),
-        .m_axis_tid   ({ intan_rhd2132_transport_m_if.tid }),
-        .m_axis_tdest ({ intan_rhd2132_transport_m_if.tdest }),
-        .m_axis_tuser ({ intan_rhd2132_transport_m_if.tuser }),
+        .m_axis_tdata ({ axon_test_source_transport_m_if.tdata }),
+        .m_axis_tvalid({ axon_test_source_transport_m_if.tvalid }),
+        .m_axis_tready({ axon_test_source_transport_m_if.tready }),
+        .m_axis_tlast ({ axon_test_source_transport_m_if.tlast }),
+        .m_axis_tid   ({ axon_test_source_transport_m_if.tid }),
+        .m_axis_tdest ({ axon_test_source_transport_m_if.tdest }),
+        .m_axis_tuser ({ axon_test_source_transport_m_if.tuser }),
 
-        .peripheral_ids({ USER_INTAN_RHD2132_ID }),
+        .peripheral_ids({ USER_AXON_TEST_SOURCE_ID }),
         .central_address(central_address),
 
         .debug_data_serdes_tx_o      (debug_data_serdes_tx),

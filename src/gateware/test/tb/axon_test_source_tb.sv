@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
 
-// intan_rhd2132_tb
+// axon_test_source_tb
 // ----------------------
-// Flat-AXI testbench wrapper for the intan_rhd2132_peripheral_top peripheral DUT.
+// Flat-AXI testbench wrapper for the axon_test_source_peripheral_top peripheral DUT.
 //
 // cocotb cannot connect directly to SystemVerilog `interface` ports, so this
 // wrapper presents a flat logic-port interface to the simulator. The flat
@@ -15,7 +15,7 @@
 // `COCOTB_RESOLVE_X=VALUE_ERROR` in the cocotb runner. Do NOT remove the
 // sideband default assignments unless you have a peripheral-specific reason.
 
-module intan_rhd2132_tb (
+module axon_test_source_tb (
   input  logic clk,
   input  logic rst,
   input  logic [31:0] rx_tdata,
@@ -50,7 +50,7 @@ module intan_rhd2132_tb (
   assign tx_tlast     = tx_if.tlast;
   assign tx_if.tready = tx_tready;
 
-  intan_rhd2132_peripheral_top dut (
+  axon_test_source_peripheral_top dut (
     .clk(clk),
     .rst(rst),
     .periph_addr(PERIPH_ADDR),
