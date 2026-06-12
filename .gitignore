@@ -15,3 +15,6 @@ compile_commands.json
 # Recordings captured during local testing.
 *.h5
 test.h5/
+
+# Superpowers brainstorming/spec scratch — local only.
+docs/superpowers/
