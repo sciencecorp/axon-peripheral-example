@@ -1,4 +1,4 @@
-// AUTO-GENERATED — checksum: bfa449e7d45fc3486c9d88229535cd110688acd1046f986ac98abe235a4fe827
+// AUTO-GENERATED — checksum: c9c34c21d1c3f7bbd111adfe6f9f72836c29a6e9eef5b213d6e4141ff25be8bd
 /*
  * Science Corporation — Axon Peripheral SDK
  * via_top.sv — Generated from peripheral.yaml by axon-peripheral-sdk codegen.
@@ -135,15 +135,11 @@ module via_top (
     encap u_encap_axon_test_source (
         .clk         (clkmc),
         .rstn        (~rst_sync[1]),
-        // Stamp the OUTBOUND src address as (controller base | peripheral slot).
-        // The host (peripheral_manager) addresses peripherals as
-        // `controller | (enumeration_slot = i+1)` and subscribes to that, and
-        // PERIF_ADDR_NUM_RESERVED_BITS=8 makes only the low byte the slot. Dev
-        // ids are allocated so their low byte == slot (0xF001 -> slot 1), so we
-        // mask to the low 8 bits. The SDK template's `central_address |
-        // <full dev id>` stamped 0xF101 instead of 0x101, so the host's RX
-        // filter never matched and the read loop saw no data. (SDK codegen bug.)
-        .periph_addr (central_address | (USER_AXON_TEST_SOURCE_ID & 32'h0000_00FF)),
+        // Source address = controller base | this peripheral's 1-based
+        // connection index (switch-port order; index in the low 8 bits, <=255).
+        // USER_*_ID is the enumeration id (see .peripheral_ids below), NOT the
+        // address — ORing the full dev id (0xF001..) here corrupts bits [15:8].
+        .periph_addr (central_address | 32'd1),
         .dest_addr   (32'h0000_0000),
         .sink_axis_if(axon_test_source_src_axis_if),
         .src_axis_if (axon_test_source_transport_s_if)
@@ -152,7 +148,8 @@ module via_top (
     axon_test_source_peripheral_top u_user_axon_test_source (
         .clk         (clkmc),
         .rst         (rst_sync[1]),
-        .periph_addr (central_address | USER_AXON_TEST_SOURCE_ID),
+        // This peripheral's own address (matches the encap source stamp above).
+        .periph_addr (central_address | 32'd1),
         .rx_axis     (axon_test_source_sink_axis_if),
         .tx_axis     (axon_test_source_src_axis_if)    );
 
