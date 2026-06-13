@@ -14,32 +14,40 @@ synapsectl -u "your-device-identifier" peripherals deploy both .
 
 This cross-compiles the driver and gateware, packages them into a `.deb`
 (staged under `dist/`), and deploys it; the driver installs to
-`/usr/lib/scifi/plugins/intan_rhd2132.so` and the bitstream to
-`/usr/lib/scifi/gateware/intan_rhd2132.bit` on the device. After deploy
+`/usr/lib/scifi/plugins/axon_test_source.so` and the bitstream to
+`/usr/lib/scifi/gateware/axon_test_source.bit` on the device. After deploy
 reports success, restart `scifi-server` yourself — on startup it scans
 `/usr/lib/scifi/plugins/`, dlopens each plugin, and dispatches matching
 peripheral IDs to the plugin's factory.
 
 ## What's in here
 
-- `src/driver/intan_rhd2132_peripheral.{h,cpp}` — the Intan RHD2132 recording
-  driver. Copied verbatim from headstage; the only changes are include paths
-  (`axon/protocol.h` → `scifi-peripheral-sdk/axon/protocol.h`, etc.).
-- `src/driver/intan_rhd2132_registers.{h,cpp}` and
-  `src/driver/intan_rhd2132_constants.h` — the chip-specific register layer,
-  also copied verbatim.
-- `src/driver/intan_rhd2132_plugin.cpp` — **the only new file.** Contains the
+This example is `axon_test_source`: a **dummy data source** peripheral. Configure
+it with a channel count and sample rate, and the gateware streams frames of
+synthetic incrementing-counter data — handy for exercising the SDK data path
+end-to-end without real hardware. It's the Axon throughput-tester idea
+(`axon_source.sv`) rebuilt onto the SDK peripheral contract.
+
+- `src/driver/axon_test_source_peripheral.{h,cpp}` — the driver. A
+  `RecordPluginWithLimits` whose `start_recording` configures the gateware
+  generator (`CONFIGURE`), starts the stream (`START_STREAM`), and whose
+  `parse_frame_payload` unpacks each `DATA_FRAME` word's low 16 bits as a sample.
+- `src/driver/axon_test_source_constants.h` — message-type opcodes (shared with
+  the gateware) and the hardware-limits constants.
+- `src/driver/axon_test_source_plugin.cpp` — the registration shim. Contains the
   `SCIFI_REGISTER_PERIPHERAL(...)` block that exports the plugin entry point and
   the factory function the host calls.
+- `src/gateware/` — the matching FPGA peripheral (`axon_test_source_peripheral.sv`)
+  plus its cocotb tests. See `src/gateware/README.md`.
 - `manifest.json` — plugin metadata. Used by `synapsectl peripherals deploy` for
   packaging and by the host's plugin loader for sanity-checking ABI version.
-- `CMakeLists.txt` — builds `intan_rhd2132.so` against the SDK shared library.
+- `CMakeLists.txt` — builds `axon_test_source.so` against the SDK shared library.
   The `.deb` itself is staged by `synapsectl peripherals build` via `fpm`
   (not CPack).
 
 ## Adapting for your own peripheral
 
-1. Replace `src/driver/intan_rhd2132_*` with your own implementation. Your class
+1. Replace `src/driver/axon_test_source_*` with your own implementation. Your class
    must inherit `scifi::plugin::RecordPluginWithLimits<YourPeripheral>` (CRTP —
    pass your own class as the template argument) and override its pure virtuals.
 2. In your plugin shim file, change the descriptor's `peripheral_ids` to your

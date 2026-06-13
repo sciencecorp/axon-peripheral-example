@@ -55,7 +55,7 @@
         <Source name="encap.enc.v" type="Verilog" type_short="Verilog">
             <Options />
         </Source>
-        <Source name="intan_rhd2132_peripheral.sv" type="Verilog" type_short="Verilog">
+        <Source name="axon_test_source_peripheral.sv" type="Verilog" type_short="Verilog">
             <Options VerilogStandard="System Verilog" />
         </Source>
         <Source name="/opt/axon-peripheral-sdk/share/products/via-devkit/build-driver/assets/prj/axonprobes/common/lsc_osc_lifcl17/lsc_osc_lifcl17.ipx" type="IPX_Module" type_short="IPX">

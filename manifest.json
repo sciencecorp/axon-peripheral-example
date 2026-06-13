@@ -1,15 +1,15 @@
 {
-  "name": "scifi-intan-rhd2132",
+  "name": "scifi-axon-test-source",
   "kind": "peripheral_plugin",
   "version": "0.1.0",
   "abi_version": 1,
-  "description": "Intan RHD2132 32-channel recording front-end",
+  "description": "Axon test source — streams synthetic dummy data over the SDK data path",
   "peripheral_ids": [
     "0xF001"
   ],
   "install": {
     "type": "shared_library",
-    "target": "/usr/lib/scifi/plugins/intan_rhd2132.so",
-    "gateware_target": "/usr/lib/scifi/gateware/intan_rhd2132.bit"
+    "target": "/usr/lib/scifi/plugins/axon_test_source.so",
+    "gateware_target": "/usr/lib/scifi/gateware/axon_test_source.bit"
   }
 }

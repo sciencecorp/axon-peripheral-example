@@ -13,11 +13,3 @@ __pycache__/
 # Cocotb sim artifacts
 sim_build_*/
 **/results.xml
-
-# Radiant build artifacts (left in-tree by a Radiant build/promote run)
-radiantc.log.*
-radiantc.tcl.*
-src/.recovery
-src/impl_1/
-src/promote.pfl
-src/promote.xml

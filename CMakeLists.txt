@@ -37,17 +37,16 @@ message(STATUS "SCIFI_PERIPHERAL_SDK_LIB: ${SCIFI_PERIPHERAL_SDK_LIB}")
 # Sources for the plugin .so.
 #
 # Note: the *only* file unique to "this plugin is loadable" is
-# intan_rhd2132_plugin.cpp — it contains the SCIFI_PLUGIN_REGISTER(...) block.
-# Everything else is the verbatim Intan implementation, copied from headstage.
+# axon_test_source_plugin.cpp — it contains the SCIFI_REGISTER_PERIPHERAL(...)
+# block. The peripheral .cpp holds the dummy-source implementation.
 set(PLUGIN_SOURCES
-  src/driver/intan_rhd2132_peripheral.cpp
-  src/driver/intan_rhd2132_registers.cpp
-  src/driver/intan_rhd2132_plugin.cpp
+  src/driver/axon_test_source_peripheral.cpp
+  src/driver/axon_test_source_plugin.cpp
 )
 
-add_library(scifi-intan-rhd2132 SHARED ${PLUGIN_SOURCES})
+add_library(scifi-axon-test-source SHARED ${PLUGIN_SOURCES})
 
-set_target_properties(scifi-intan-rhd2132 PROPERTIES
+set_target_properties(scifi-axon-test-source PROPERTIES
   CXX_STANDARD 20
   CXX_STANDARD_REQUIRED ON
   CXX_EXTENSIONS OFF
@@ -58,16 +57,16 @@ set_target_properties(scifi-intan-rhd2132 PROPERTIES
   VISIBILITY_INLINES_HIDDEN ON
   # Bare filename: synapsectl deploy places this directly into /usr/lib/scifi/plugins/.
   PREFIX ""
-  OUTPUT_NAME "intan_rhd2132"
+  OUTPUT_NAME "axon_test_source"
 )
 
-target_include_directories(scifi-intan-rhd2132 PRIVATE
+target_include_directories(scifi-axon-test-source PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src/driver
 )
 
-target_compile_options(scifi-intan-rhd2132 PRIVATE -Wall -Wno-psabi)
+target_compile_options(scifi-axon-test-source PRIVATE -Wall -Wno-psabi)
 
-target_link_libraries(scifi-intan-rhd2132
+target_link_libraries(scifi-axon-test-source
   PUBLIC
     cppzmq
     protobuf::libprotobuf
@@ -79,7 +78,7 @@ target_link_libraries(scifi-intan-rhd2132
 # Resolve transitive NEEDED libs from the SDK's deps (placed in /opt/scifi/lib
 # by scifi-headstage-shared-libraries in the builder image, mirroring the
 # synapse-example-app convention).
-target_link_options(scifi-intan-rhd2132 PRIVATE -Wl,-rpath-link,/opt/scifi/lib)
+target_link_options(scifi-axon-test-source PRIVATE -Wl,-rpath-link,/opt/scifi/lib)
 
 # Note: this CMakeLists.txt only builds the .so. The .deb packaging happens in
 # `synapsectl peripherals build`, which stages files (this .so + the SDK shared
