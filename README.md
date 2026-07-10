@@ -1,6 +1,6 @@
 # axon-peripheral-example
 
-A SciFi peripheral plugin built against [axon-peripheral-driver-sdk](../headstage/ops/sdk/axon-peripheral-driver-sdk).
+A SciFi peripheral plugin built against [scifi-peripheral-sdk](../headstage/ops/sdk/scifi-peripheral-sdk).
 Fork this repo, replace `src/` with your peripheral, edit `manifest.json`, and you're done.
 
 ## tl;dr
@@ -64,13 +64,13 @@ into this repo's `sdk/` directory. Both build Dockerfiles prefer a local .deb
 over the apt repo version. There are **two** SDKs, one per build half — drop in
 whichever you're iterating on (or both):
 
-- **Driver half** — `axon-peripheral-driver-sdk_*.deb`, consumed by the driver build.
+- **Driver half** — `scifi-peripheral-sdk_*.deb`, consumed by the driver build.
 - **Gateware half** — `axon-peripheral-sdk*.deb`, consumed by
   `Dockerfiles/gateware.Dockerfile`.
 
 ```bash
 # Driver SDK (built from headstage: ./ops/package/scripts/package_axon_peripheral_driver_sdk.sh)
-cp ../headstage/output/axon-peripheral-driver-sdk_0.2.0_arm64.deb sdk/
+cp ../headstage/output/scifi-peripheral-sdk_0.2.0_arm64.deb sdk/
 # Gateware SDK
 cp ../axon-peripheral-sdk/axon-peripheral-sdk_0.1.0_amd64.deb sdk/
 synapsectl peripherals build both .

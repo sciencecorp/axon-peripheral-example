@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.20.1)
 project(scifi-peripheral-example VERSION 0.1.0)
 
 option(BUILD_FOR_ARM64 "Build for ARM64 architecture" OFF)
-option(USE_LOCAL_SDK "Use locally built axon-peripheral-driver-sdk instead of system install" OFF)
-set(LOCAL_SDK_PATH "axon-peripheral-driver-sdk" CACHE PATH "Path to local SDK build directory")
+option(USE_LOCAL_SDK "Use locally built scifi-peripheral-sdk instead of system install" OFF)
+set(LOCAL_SDK_PATH "scifi-peripheral-sdk" CACHE PATH "Path to local SDK build directory")
 
 if(BUILD_FOR_ARM64 AND NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
   message(STATUS "Cross compiling for ARM64")
@@ -21,13 +21,13 @@ find_package(spdlog REQUIRED CONFIG)
 if(USE_LOCAL_SDK)
   message(STATUS "Using local SDK from: ${LOCAL_SDK_PATH}")
   set(SDK_LIB_PATH "${LOCAL_SDK_PATH}")
-  set(SDK_LIB_NAME "axon-peripheral-driver-sdk")
+  set(SDK_LIB_NAME "scifi-peripheral-sdk")
   link_directories(${SDK_LIB_PATH})
   include_directories("${LOCAL_SDK_PATH}/include")
   set(SCIFI_PERIPHERAL_SDK_LIB ${SDK_LIB_NAME})
 else()
   find_library(SCIFI_PERIPHERAL_SDK_LIB
-    NAMES axon-peripheral-driver-sdk libaxon-peripheral-driver-sdk.so.0
+    NAMES scifi-peripheral-sdk libscifi-peripheral-sdk.so.0
     REQUIRED
   )
 endif()

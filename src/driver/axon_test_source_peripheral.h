@@ -10,8 +10,8 @@
 #include "api/query.pb.h"
 #include "api/synapse.pb.h"
 #include "axon_test_source_constants.h"
-#include "axon-peripheral-driver-sdk/record_plugin.h"
-#include "axon-peripheral-driver-sdk/scifi/status.h"
+#include "scifi-peripheral-sdk/record_plugin.h"
+#include "scifi-peripheral-sdk/scifi/status.h"
 
 namespace axon_test_source {
 

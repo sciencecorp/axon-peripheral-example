@@ -75,13 +75,13 @@ RUN cd "${VCPKG_ROOT}" && \
     --x-install-root "$PWD/build/host/vcpkg_installed" \
     --clean-after-build
 
-# Install axon-peripheral-driver-sdk + scifi-headstage-shared-libraries from the Science apt repo.
-# These supply libaxon-peripheral-driver-sdk.so + headers and the transitive runtime deps the
+# Install scifi-peripheral-sdk + scifi-headstage-shared-libraries from the Science apt repo.
+# These supply libscifi-peripheral-sdk.so + headers and the transitive runtime deps the
 # plugin .so will pick up via -rpath-link.
 ARG SDK_VERSION=0.2.0
 ARG SHARED_LIBS_VERSION=1.3.0
 COPY keys/science-repo-public.asc /usr/share/keyrings/scifi-repo-science-public.asc
-# Drop a freshly-built axon-peripheral-driver-sdk_*.deb into sdk/ to test against an
+# Drop a freshly-built scifi-peripheral-sdk_*.deb into sdk/ to test against an
 # unreleased SDK; otherwise the apt repo version is pulled.
 COPY sdk/ /tmp/sdk-staging/
 RUN set -eux; \
@@ -89,12 +89,12 @@ RUN set -eux; \
     echo "deb [signed-by=/usr/share/keyrings/scifi-repo-science-public.asc] https://pub-879bfa29e67b4cd6b0c78b0d4cc3aa59.r2.dev/scifi focal main" > /etc/apt/sources.list.d/repo-science.list; \
     apt-get update; \
     apt-get install -y scifi-headstage-shared-libraries="${SHARED_LIBS_VERSION}"; \
-    if ls /tmp/sdk-staging/axon-peripheral-driver-sdk*.deb >/dev/null 2>&1; then \
+    if ls /tmp/sdk-staging/scifi-peripheral-sdk*.deb >/dev/null 2>&1; then \
         echo "==> Using local SDK .deb from sdk/"; \
-        apt-get install -y /tmp/sdk-staging/axon-peripheral-driver-sdk*.deb; \
+        apt-get install -y /tmp/sdk-staging/scifi-peripheral-sdk*.deb; \
     else \
-        echo "==> Installing axon-peripheral-driver-sdk from apt repo"; \
-        apt-get install -y axon-peripheral-driver-sdk="${SDK_VERSION}"; \
+        echo "==> Installing scifi-peripheral-sdk from apt repo"; \
+        apt-get install -y scifi-peripheral-sdk="${SDK_VERSION}"; \
     fi; \
     rm -rf /var/lib/apt/lists/* /tmp/sdk-staging
 
