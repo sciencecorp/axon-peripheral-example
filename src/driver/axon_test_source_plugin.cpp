@@ -7,7 +7,7 @@
 
 #include <cstddef>
 
-#include "scifi-peripheral-sdk/plugin.h"
+#include "axon-peripheral-driver-sdk/plugin.h"
 
 #include "axon_test_source_peripheral.h"
 
