@@ -70,7 +70,7 @@ whichever you're iterating on (or both):
 
 ```bash
 # Driver SDK (built from headstage: ./ops/package/scripts/package_axon_peripheral_driver_sdk.sh)
-cp ../headstage/output/axon-peripheral-driver-sdk_0.1.0_arm64.deb sdk/
+cp ../headstage/output/axon-peripheral-driver-sdk_0.2.0_arm64.deb sdk/
 # Gateware SDK
 cp ../axon-peripheral-sdk/axon-peripheral-sdk_0.1.0_amd64.deb sdk/
 synapsectl peripherals build both .
