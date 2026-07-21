@@ -1,6 +1,6 @@
 # axon-peripheral-example
 
-A SciFi peripheral plugin built against [scifi-peripheral-sdk](../scifi-peripheral-sdk).
+A SciFi peripheral plugin built against [scifi-peripheral-sdk](../headstage/ops/sdk/scifi-peripheral-sdk).
 Fork this repo, replace `src/` with your peripheral, edit `manifest.json`, and you're done.
 
 ## tl;dr
@@ -69,8 +69,8 @@ whichever you're iterating on (or both):
   `Dockerfiles/gateware.Dockerfile`.
 
 ```bash
-# Driver SDK
-cp ../scifi-peripheral-sdk/scifi-peripheral-sdk_0.1.0_arm64.deb sdk/
+# Driver SDK (built from headstage: ./ops/package/scripts/package_axon_peripheral_driver_sdk.sh)
+cp ../headstage/output/scifi-peripheral-sdk_0.2.0_arm64.deb sdk/
 # Gateware SDK
 cp ../axon-peripheral-sdk/axon-peripheral-sdk_0.1.0_amd64.deb sdk/
 synapsectl peripherals build both .

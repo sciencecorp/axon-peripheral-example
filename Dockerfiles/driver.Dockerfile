@@ -78,7 +78,7 @@ RUN cd "${VCPKG_ROOT}" && \
 # Install scifi-peripheral-sdk + scifi-headstage-shared-libraries from the Science apt repo.
 # These supply libscifi-peripheral-sdk.so + headers and the transitive runtime deps the
 # plugin .so will pick up via -rpath-link.
-ARG SDK_VERSION=0.1.0
+ARG SDK_VERSION=0.2.0
 ARG SHARED_LIBS_VERSION=1.3.0
 COPY keys/science-repo-public.asc /usr/share/keyrings/scifi-repo-science-public.asc
 # Drop a freshly-built scifi-peripheral-sdk_*.deb into sdk/ to test against an
