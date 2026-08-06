@@ -16,8 +16,22 @@ constexpr uint32_t MAX_SAMPLE_RATE   = 1'000'000;  // Hz
 constexpr uint32_t MAX_BIT_WIDTH     = 16;
 constexpr uint32_t MAX_GAIN          = 1;
 
-// Gateware pacing clock (via_top clkmc = 160 MHz / 4). Turns a sample rate into
-// the gateware's per-frame down-counter value.
-constexpr uint32_t CLK_FREQ_HZ = 40'000'000;
+// Gateware pacing clock (clkmc). Turns a sample rate into the gateware's
+// per-frame down-counter value, so it MUST match the clkmc of the target
+// profile the bitstream was built for — get this wrong and every sample rate
+// is off by the ratio of the two clocks, silently.
+//
+// The value comes from the profile's `clocking.clkmc_hz`
+// (`axon-peripheral-sdk list-profiles`). CMake defines exactly one
+// AXON_PROFILE_* macro from -DAXON_TARGET_PROFILE=<profile>; there is
+// deliberately no default, so an unparameterised build fails here rather than
+// shipping a plausible-but-wrong rate.
+#if defined(AXON_PROFILE_VIA_DEVKIT)
+constexpr uint32_t CLK_FREQ_HZ = 40'000'000;   // via-devkit: scIR clkmc
+#elif defined(AXON_PROFILE_NERV512U_DEVKIT)
+constexpr uint32_t CLK_FREQ_HZ = 80'000'000;   // nerv512u-devkit: nerv_top clkmc
+#else
+#error "No target profile selected. Configure with -DAXON_TARGET_PROFILE=via-devkit or -DAXON_TARGET_PROFILE=nerv512u-devkit."
+#endif
 
 }  // namespace axon_test_source

@@ -93,7 +93,12 @@ RUN set -eux; \
 # with sdk/*.deb local override for unreleased SDKs (same pattern as
 # driver.Dockerfile). When sdk/ has a .deb the apt repo isn't touched, so
 # unpublished or pre-release builds don't require a working repo.
-ARG AXON_SDK_VERSION=1.0.3-1~jammy
+# Must name a version actually published to axonprobes/stable — check with:
+#   curl -s https://pub-879bfa29e67b4cd6b0c78b0d4cc3aa59.r2.dev/axonprobes/dists/stable/main/binary-amd64/Packages \
+#     | grep -A2 '^Package: axon-peripheral-sdk'
+# 1.0.8 is the release that ships the nerv512u-devkit target profile alongside
+# via-devkit (share/profiles/ + share/products/ carry both).
+ARG AXON_SDK_VERSION=1.0.8-1~jammy
 COPY keys/axonprobes-repo-science-public.asc /usr/share/keyrings/axonprobes-repo-science-public.asc
 COPY sdk/ /tmp/sdk-staging/
 USER root

@@ -9,31 +9,89 @@ wiring, build, simulation, and deploy.
 > container (or, in a dev shell with the SDK installed, you can call
 > `axon-peripheral-sdk <verb>` directly).
 
+## Two target profiles
+
+This example builds for **both** supported devkits. Each is a separate SDK
+project under its own directory, because `target_profile` in `peripheral.yaml`
+is a single value — one project targets exactly one devkit.
+
+| Profile | Board | FPGA | clkmc | USB PID |
+| --- | --- | --- | --- | --- |
+| `via-devkit` | Via Devkit (scIR) | LIFCL-17-9SG72C | 40 MHz | `0x000B` |
+| `nerv512u-devkit` | NeRV512U Devkit | LIFCL-33U-9CTG104C | 80 MHz | `0x0001` |
+
+They can't share a directory: each profile's generated top wrapper, Radiant
+seed project, and encrypted `transport.enc.v` bundle have the *same filenames*
+but different contents (via's transport carries the scIR SerDes tree; the
+NeRV512U's carries the Nucleus RISC-V/USB3 SoC).
+
+What *is* shared is everything profile-agnostic — the peripheral RTL and its
+testbench — which lives once at the top of this directory and is referenced
+from each project by a `../` path.
+
 ## Layout
 
 ```
 .
-├── peripheral.yaml          # Source of truth — peripherals, IO, msg types, sources
-├── conftest.py              # Exposes SDK_ASSET_ROOT to per-peripheral tests
-├── src/
-│   ├── via_top.sv           # AUTO-GENERATED top wrapper (checked in)
-│   ├── scir_sdk.rdf         # AUTO-GENERATED Radiant project (checked in)
-│   ├── scir_sdk.pdc         # Framework pin constraints + your board pins (append below the marker)
-│   ├── scir_sdk.sdc         # Framework timing constraints + your board timing (append below the marker)
-│   ├── axon_test_source_peripheral.sv
-│   └── ...                  # Your peripheral SystemVerilog
+├── axon_test_source_peripheral.sv   # SHARED peripheral RTL (both profiles)
 ├── test/
-│   ├── tb/                  # Per-peripheral testbenches + cocotb tests
-│   └── ...
-└── build/                   # Codegen + Radiant outputs (gitignored)
+│   ├── conftest.py                  # Exposes SDK_ASSET_ROOT to per-peripheral tests
+│   └── tb/                          # SHARED testbench + cocotb tests
+├── via-devkit/                      # ── SDK project, target_profile: via-devkit
+│   ├── peripheral.yaml              # Source of truth — peripherals, IO, msg types, sources
+│   ├── src/
+│   │   ├── via_top.sv               # AUTO-GENERATED top wrapper (checked in)
+│   │   ├── scir_sdk.rdf             # AUTO-GENERATED Radiant project (checked in)
+│   │   ├── scir_sdk.pdc             # Framework pin constraints + your board pins
+│   │   ├── scir_sdk.sdc             # Framework timing constraints + your board timing
+│   │   └── {transport,decap,encap}.enc.v   # Encrypted SDK bundles for this profile
+│   └── build/                       # Codegen + Radiant outputs (gitignored)
+└── nerv512u-devkit/                 # ── SDK project, target_profile: nerv512u-devkit
+    ├── peripheral.yaml
+    ├── src/
+    │   ├── nerv_top.sv
+    │   ├── nerv512u_sdk.rdf
+    │   ├── nerv512u_sdk.{pdc,sdc}
+    │   └── {transport,decap,encap}.enc.v
+    └── build/
 ```
 
-`via_top.sv` and `scir_sdk.rdf` are generated from `peripheral.yaml` and
-checked in so the project's source-of-truth state lives in git. You can
-hand-edit either file — the `// AUTO-GENERATED — checksum: <sha>` line at the
-top is a fingerprint that lets `synapsectl peripherals gateware generate` notice
-the edit and refuse to overwrite your work. To discard hand-edits and re-emit
-from the manifest, pass `--force` (see the `--force` semantics below).
+Each project's `<top>.sv` and `<seed>.rdf` are generated from its
+`peripheral.yaml` and checked in so the source-of-truth state lives in git. You
+can hand-edit either file — the `// AUTO-GENERATED — checksum: <sha>` line at
+the top is a fingerprint that lets `generate` notice the edit and refuse to
+overwrite your work. To discard hand-edits and re-emit from the manifest, pass
+`--force` (see the `--force` semantics below).
+
+## Selecting a profile
+
+Every `synapsectl peripherals build` / `deploy` invocation takes `--profile`:
+
+```bash
+synapsectl peripherals build both . --profile nerv512u-devkit
+synapsectl peripherals build both . --profile via-devkit
+```
+
+Because this repo has more than one profile, **`--profile` is required** —
+synapsectl errors out rather than picking one. That is deliberate: the choice
+also sets the driver's compiled-in `CLK_FREQ_HZ`, so a wrong guess would ship a
+plugin whose sample rates are off by the ratio of the two clocks, with nothing
+failing until it's on hardware.
+
+The `gateware` pass-through can't take `--profile` — it captures its whole tail
+verbatim for the SDK, so a synapsectl-side flag would be forwarded instead of
+read. Use the environment variable, which every command honours:
+
+```bash
+export SYNAPSE_GATEWARE_PROFILE=nerv512u-devkit
+synapsectl peripherals gateware sim
+```
+
+or address the project directly with the SDK's own flag:
+
+```bash
+synapsectl peripherals gateware validate --project src/gateware/via-devkit
+```
 
 ## Add or change a peripheral
 
@@ -48,10 +106,39 @@ synapsectl peripherals gateware generate
 `generate` allocates any missing `dev_peripheral_id`, scaffolds the missing
 per-peripheral stubs (`src/<name>_peripheral.sv`, `test/tb/<name>_tb.sv`,
 `test/tb/test_<name>.py` — existing files are never overwritten), re-emits the
-derived files (`src/via_top.sv`, `src/scir_sdk.rdf`, and the framework region of
-`src/scir_sdk.pdc` / `src/scir_sdk.sdc` — your appended constraints are
-preserved), and validates the project. A single `generate` covers id
-allocation, scaffolding, codegen, and validation.
+derived files (`src/<top>.sv`, `src/<seed>.rdf`, and the framework region of
+`src/<seed>.pdc` / `src/<seed>.sdc` — your appended constraints are preserved),
+and validates the project. A single `generate` covers id allocation,
+scaffolding, codegen, and validation.
+
+> **A note on scaffolded stubs.** `generate` emits
+> `src/<name>_peripheral.sv`, `test/tb/<name>_tb.sv` and
+> `test/tb/test_<name>.py` inside the project whenever those exact paths are
+> empty — it keys off the convention alone and never looks at what
+> `fpga.sources` actually points to. Since this example's RTL and tests are
+> shared one level up, `generate` drops a loopback stub into each profile
+> directory. The stubs are inert: the emitted `.rdf` compiles
+> `../../axon_test_source_peripheral.sv`, not them. They're gitignored rather
+> than committed, because a stub declares the *same module name* as the real
+> peripheral and a second definition in the tree confuses linters and editor
+> indexes. Delete them whenever you like.
+
+**Adding a peripheral to both profiles** means editing both
+`peripheral.yaml` files and running `generate` once per project. Keep the
+`dev_peripheral_id` values in sync between them — the same peripheral should
+carry the same id on both devkits, since the driver's `peripheral_ids` are what
+the host dispatches on and there is only one driver.
+
+To scaffold a *new* profile project (when the SDK gains another target):
+
+```
+synapsectl peripherals gateware new <profile> --target <profile> --peripherals axon_test_source
+```
+
+Run it from the repo root; the pass-through puts the SDK's cwd inside
+`src/gateware/`, so the project lands at `src/gateware/<profile>/`. Then point
+its `fpga.sources` and `verification.cocotb_tests` at the shared `../` paths,
+as the two existing projects do.
 
 ## Peripherals
 
@@ -60,24 +147,31 @@ allocation, scaffolding, codegen, and validation.
 ## Build
 
 ```
-synapsectl peripherals gateware build
+synapsectl peripherals build gateware . --profile <profile>
 ```
 
 `build` re-emits the derived files from `peripheral.yaml`, validates the
-project, then invokes Radiant to produce a bitstream under `build/`.
+project, then invokes Radiant to produce a bitstream under
+`<profile>/build/`.
 
 Other commands:
 
-- `synapsectl peripherals gateware generate` — re-emit `via_top.sv` +
-  `scir_sdk.rdf` (and the framework region of `scir_sdk.{pdc,sdc}`) without invoking Radiant.
-  Hand-edits to either file are supported: the checksum header is a safety net
-  that lets `generate` notice your edits and refuse to overwrite them by
-  default. Pass `--force` to discard hand-edits and re-emit from the manifest,
-  or `--keep <path>` to skip a specific file. **Note:** this checksum safety
-  net only covers the codegen-owned files. Your peripheral SystemVerilog and
-  the `# CUSTOMIZE:`-marked regions in test files are never overwritten.
+- `synapsectl peripherals gateware generate` — re-emit `<top>.sv` +
+  `<seed>.rdf` (and the framework region of `<seed>.{pdc,sdc}`) without
+  invoking Radiant. Hand-edits to either file are supported: the checksum
+  header is a safety net that lets `generate` notice your edits and refuse to
+  overwrite them by default. Pass `--force` to discard hand-edits and re-emit
+  from the manifest, or `--keep <path>` to skip a specific file. **Note:** this
+  checksum safety net only covers the codegen-owned files. Your peripheral
+  SystemVerilog and the `# CUSTOMIZE:`-marked regions in test files are never
+  overwritten.
 - `synapsectl peripherals gateware deploy` — packages `build/` outputs into a
   deployable bundle (Debian package or raw bitstream, depending on profile).
+
+The two profiles produce distinctly-named gateware `.deb`s
+(`axon-gateware-via-devkit-gateware`, `axon-gateware-nerv512u-devkit-gateware`),
+derived from `<target_profile>_<project.name>` in the build summary, so both
+can sit in `dist/` and install side by side.
 
 ## Simulate
 
@@ -88,6 +182,13 @@ synapsectl peripherals gateware sim
 `sim` runs the cocotb suites listed in each peripheral's
 `verification.cocotb_tests` against the per-peripheral testbench wrapper.
 Equivalent to `pytest test/tb/test_<name>.py`.
+
+The suite is **profile-independent** and lives once under `test/`: it compiles
+only the shared peripheral RTL plus the SDK's `axi4_stream_interface`, never a
+profile's top wrapper or transport bundle. Every assertion counts clock cycles
+rather than nanoseconds, so the 80 MHz `CLK_PERIOD_NS` in the test file is
+cosmetic and holds for via-devkit's 40 MHz clkmc too. Running `sim` under
+either profile therefore exercises exactly the same thing.
 
 **cocotbext.axi configuration note.** The per-peripheral testbench drives
 `rx_axis` / `tx_axis` through `cocotbext.axi`. To match the SDK frame
@@ -109,11 +210,16 @@ Every peripheral module must expose the following ports verbatim:
 
 | Port | Direction | Width | Notes |
 | --- | --- | --- | --- |
-| `clk` | input | 1 | Main clock (80 MHz on via-devkit) |
+| `clk` | input | 1 | Main clock (clkmc: 40 MHz on via-devkit, 80 MHz on nerv512u-devkit) |
 | `rst` | input | 1 | **Synchronous active-high** reset — NOT `rstn` |
 | `periph_addr` | input | 32 | This peripheral's 32-bit address |
 | `rx_axis` | `axi4_stream_interface.secondary` | — | Frames in |
 | `tx_axis` | `axi4_stream_interface.main` | — | Frames out |
+
+The contract itself is identical across profiles — that is what lets one
+`axon_test_source_peripheral.sv` serve both. Only the clock *rate* differs, so
+any RTL that converts between time and cycles must take the rate as a parameter
+rather than hardcoding it.
 
 Frame format on `rx_axis` / `tx_axis`:
 
@@ -134,12 +240,15 @@ all upstream and downstream framing for you.
 window are reserved for built-in peripherals (`0x0000..0xF000`) or the
 broadcast address (`0xFFFF`). You can omit `dev_peripheral_id` entirely and
 `generate` allocates the lowest-free id in the window; `generate` and `build`
-both reject an explicit id outside the window.
+both reject an explicit id outside the window. The window is the same on both
+profiles, and ids are allocated per project — so keep them in sync by hand if
+you want a peripheral to carry one id everywhere.
 
 ## Constraint tiers
 
-All constraints live in two mixed-ownership files, `src/scir_sdk.pdc`
-(physical/pins) and `src/scir_sdk.sdc` (timing). Each file has two regions:
+All constraints live in two mixed-ownership files per profile,
+`<profile>/src/<seed>.pdc` (physical/pins) and `<profile>/src/<seed>.sdc`
+(timing). Each file has two regions:
 
 - A **framework region**, delimited by sentinel markers
   (`# >>> AXON PERIPHERAL SDK FRAMEWORK CONSTRAINTS ... >>>` …
@@ -150,10 +259,14 @@ All constraints live in two mixed-ownership files, `src/scir_sdk.pdc`
   peripheral pin/timing constraints here; `generate` preserves this region
   verbatim across runs.
 
+Pin assignments are inherently per-board, so this is one place where the two
+profiles genuinely diverge — an appended constraint in `via-devkit/src/scir_sdk.pdc`
+has no counterpart in the NeRV512U project unless you write one.
+
 ## Modification check
 
-Codegen-owned files (`src/via_top.sv`, `src/scir_sdk.rdf`) carry a
-`// AUTO-GENERATED — checksum: <sha256>` header at the top of the file
+Codegen-owned files (`<profile>/src/<top>.sv`, `<profile>/src/<seed>.rdf`)
+carry a `// AUTO-GENERATED — checksum: <sha256>` header at the top of the file
 (for `.rdf`, the same marker in an XML comment: `<!-- AUTO-GENERATED — checksum: ... -->`).
 Hand-editing these files is fine; the checksum is just a safety net.
 Before regenerating, the CLI re-hashes the file body on disk and refuses
@@ -168,14 +281,14 @@ the manifest. `--force` semantics:
 - Update the checksum header to match the freshly-emitted body so the
   next `generate` run starts from a clean slate.
 
-`--force` applies only to the checksummed files (`via_top.sv`, `scir_sdk.rdf`).
-The framework region of `scir_sdk.{pdc,sdc}` is re-emitted on every `generate`
+`--force` applies only to the checksummed files (`<top>.sv`, `<seed>.rdf`).
+The framework region of `<seed>.{pdc,sdc}` is re-emitted on every `generate`
 regardless of `--force` (it carries no checksum); your user-append region below
 the end marker is always preserved.
 
 ## Customizing the on-device .bit name
 
-The synapsectl peripheral build flow stages the FPGA bitstream produced by `synapsectl peripherals gateware build` into the resulting `.deb` at `/usr/lib/scifi/gateware/<basename>.bit`. By default the basename is derived from the manifest's `install.target` (the .so path) with the `.so` suffix replaced by `.bit`. If you want a different on-device basename — for example a per-devkit name like `via.bit` so that all peripherals targeting the same devkit land at the same bitstream path — set `install.gateware_target` in `manifest.json`:
+The synapsectl peripheral build flow stages the FPGA bitstream produced by `synapsectl peripherals build gateware` into the resulting `.deb` at `/usr/lib/scifi/gateware/<basename>.bit`. By default the basename is derived from the manifest's `install.target` (the .so path) with the `.so` suffix replaced by `.bit`. If you want a different on-device basename — for example a per-devkit name like `nerv512u.bit` so that all peripherals targeting the same devkit land at the same bitstream path — set `install.gateware_target` in `manifest.json`:
 
 ```json
 "install": {
@@ -185,7 +298,13 @@ The synapsectl peripheral build flow stages the FPGA bitstream produced by `syna
 }
 ```
 
-The synapsectl staging step renames the hashed build artifact (`src/gateware/build/bitstreams/sdk_<product>_<pdc>_<project_name>_v<sdk_version>_<git_hash>_<datetime>.bit`) to the basename of `install.gateware_target` when copying it into the `.deb`. On `dpkg -i`, the bitstream installs at the full `install.gateware_target` path on the device.
+The synapsectl staging step renames the hashed build artifact (`src/gateware/<profile>/build/bitstreams/sdk_<product>_<pdc>_<project_name>_v<sdk_version>_<git_hash>_<datetime>.bit`) to the basename of `install.gateware_target` when copying it into the `.deb`. On `dpkg -i`, the bitstream installs at the full `install.gateware_target` path on the device.
+
+Note that `install.gateware_target` is a single value in `manifest.json`, shared
+by both profiles — so the two profiles' bitstreams land at the *same* on-device
+path and the second install replaces the first. That is the intended behaviour
+(a given device is wired to one devkit), but it does mean you cannot stage both
+profiles' bitstreams on one device at once.
 
 Fallback order if `install.gateware_target` is unset or empty:
 
