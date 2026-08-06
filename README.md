@@ -24,10 +24,29 @@ peripheral IDs to the plugin's factory.
 
 The example builds for **both** supported devkits. Pick one per build:
 
-| `--profile` | Board | FPGA | clkmc |
-| --- | --- | --- | --- |
-| `via-devkit` | Via Devkit (scIR) | LIFCL-17-9SG72C | 40 MHz |
-| `nerv512u-devkit` | NeRV512U Devkit | LIFCL-33U-9CTG104C | 80 MHz |
+|                          | `via-devkit`                    | `nerv512u-devkit`               |
+| ------------------------ | ------------------------------- | ------------------------------- |
+| Board                    | Via Devkit (scIR)               | NeRV512U Devkit                 |
+| Aliases                  | `via-devkit`, `sciop-devkit`    | `nerv512u-devkit`               |
+| FPGA                     | `LIFCL-17-9SG72C` (QFN72)       | `LIFCL-33U-9CTG104C` (FCCSP104) |
+| Logic / BRAM             | 16,640 LUT / 432 KB             | 33,000 LUT / 1,008 KB           |
+| Peripheral `clk` (clkmc) | 40 MHz                          | 80 MHz                          |
+| Host link                | scIR SerDes                     | USB 3 (Nucleus RISC-V SoC)      |
+| USB PID                  | `0x000B`                        | `0x0001`                        |
+| Gateware project         | `src/gateware/via-devkit/`      | `src/gateware/nerv512u-devkit/` |
+| Top module               | `src/via_top.sv`                | `src/nerv_top.sv`               |
+| Board seed               | `src/scir_sdk.{rdf,pdc,sdc}`    | `src/nerv512u_sdk.{rdf,pdc,sdc}`|
+| Driver macro             | `AXON_PROFILE_VIA_DEVKIT`       | `AXON_PROFILE_NERV512U_DEVKIT`  |
+
+Both devkits expose the **same peripheral contract** — identical port list,
+identical frame format, same `dev_peripheral_id` window (`0xF001..0xFFFE`, 8
+user peripherals max). That is what lets one
+`src/gateware/axon_test_source_peripheral.sv` and one cocotb suite serve both;
+only the generated top, board seed and encrypted transport bundle differ, and
+those are what force a separate project directory per profile.
+
+Run `synapsectl peripherals gateware list-profiles` to see what the SDK you
+have installed actually ships.
 
 `--profile` is **required** here, because the repo ships more than one and
 synapsectl refuses to guess. It selects the gateware project under
