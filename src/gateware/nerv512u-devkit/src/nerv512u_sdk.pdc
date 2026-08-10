@@ -1,0 +1,55 @@
+# >>> AXON PERIPHERAL SDK FRAMEWORK CONSTRAINTS (generated; do not edit) >>>
+# SDK NeRV512U Devkit physical constraints — minimal.
+#
+# Only the pins the auto-generated `nerv_top.sv` uses:
+#   - clki / clki_en: 60 MHz reference clock + oscillator enable
+#   - usb23_DP / usb23_DM: USB 2 D+/D-
+#   - uart_rx / uart_tx: debug UART
+#
+# The USB 3 SuperSpeed pins (RXM_i/RXP_i, TXM_o/TXP_o, VBUS_i,
+# REFINCLKEXT{P,M}_i, RESEXTUSB2) are placed automatically by the Lattice USB23
+# hard-IP on its dedicated PCS pads — they are top-level ports of nerv_top but
+# take NO ldc_set_location here, mirroring the production nerv512u.pdc.
+#
+# Production-only neural-recording pins (ASIC01 / MUX01 / regulator enables) are
+# intentionally NOT included — the SDK target leaves those FPGA pads free so the
+# user can claim them in the user-append region below.
+#
+# This is the FRAMEWORK region of <project>/src/nerv512u_sdk.pdc:
+# `axon-peripheral-sdk generate` re-emits it on every run. Do not edit here — add
+# your own pin constraints in the user-append region below the framework end
+# marker, which `generate` preserves verbatim.
+
+ldc_set_sysconfig {MASTER_SPI_PORT=DISABLE CONFIGIO_VOLTAGE_BANK0=1.8 CONFIGIO_VOLTAGE_BANK1=1.8 CONFIG_IOSLEW=FAST MCCLK_FREQ=7.0}
+ldc_set_vcc -bank 0 1.8
+ldc_set_vcc -bank 1 1.8
+ldc_set_vcc -bank 2 1.2
+ldc_set_vcc -bank 3 1.8
+ldc_set_vcc -bank 4 1.2
+
+# 60 MHz reference clock + oscillator enable
+ldc_set_location -site {G7} [get_ports clki]
+ldc_set_port -iobuf {IO_TYPE=LVCMOS18H} [get_ports clki]
+ldc_set_location -site {G6} [get_ports clki_en]
+ldc_set_port -iobuf {IO_TYPE=LVCMOS18H} [get_ports clki_en]
+
+# USB 2 D+/D-
+ldc_set_port -iobuf {PULLMODE=NONE DRIVE=16} [get_ports usb23_DP]
+ldc_set_port -iobuf {PULLMODE=NONE DRIVE=16} [get_ports usb23_DM]
+
+# Debug UART + board power-sequencing VBUS trigger
+ldc_set_location -site {E6} [get_ports uart_rx]
+ldc_set_port -iobuf {IO_TYPE=LVCMOS18H} [get_ports uart_rx]
+ldc_set_location -site {F7} [get_ports uart_tx]
+ldc_set_port -iobuf {IO_TYPE=LVCMOS18H} [get_ports uart_tx]
+# vbus_trig: asserted after the ~5 s power-seq delay so the host sees VBUS and
+# enumerates (see nerv_top). Site H6, matching production nerv512u.pdc.
+ldc_set_location -site {H6} [get_ports vbus_trig]
+ldc_set_port -iobuf {IO_TYPE=LVCMOS18H} [get_ports vbus_trig]
+# <<< AXON PERIPHERAL SDK FRAMEWORK CONSTRAINTS <<<
+
+# ---------------------------------------------------------------------------
+# Add your peripheral pin/timing constraints below. Everything below the
+# framework block above is yours and is preserved across
+# `axon-peripheral-sdk generate`.
+# ---------------------------------------------------------------------------

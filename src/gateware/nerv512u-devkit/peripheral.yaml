@@ -1,5 +1,5 @@
 schema_version: 1
-target_profile: via-devkit
+target_profile: nerv512u-devkit
 project:
   name: gateware
   description: ''
@@ -11,7 +11,9 @@ peripherals:
   fpga:
     module: axon_test_source_peripheral_top
     sources:
-    - src/axon_test_source_peripheral.sv
+    # Shared with the other target profile — one copy of the peripheral RTL
+    # lives at src/gateware/, each profile project references it by ../.
+    - ../axon_test_source_peripheral.sv
     constraints:
       sdc: []
       pdc: []
@@ -40,6 +42,7 @@ peripherals:
       payload_bytes: variable
   verification:
     cocotb_tests:
-    - test/tb/test_axon_test_source.py
+    # Shared testbench — see the note on fpga.sources above.
+    - ../test/tb/test_axon_test_source.py
     sv_tests: []
   dev_peripheral_id: 0xf001
