@@ -17,27 +17,7 @@ peripherals:
       pdc: []
     io: []
   api:
-    msg_types:
-    # Set stream parameters: payload word0 = channel_count, word1 = sample_period (clk ticks).
-    - name: CONFIGURE
-      value: 0x0052
-      dir: host_to_fpga
-      payload_bytes: 8
-    # Begin streaming DATA_FRAME packets.
-    - name: START_STREAM
-      value: 0x0054
-      dir: host_to_fpga
-      payload_bytes: 0
-    # Stop streaming.
-    - name: STOP_STREAM
-      value: 0x0055
-      dir: host_to_fpga
-      payload_bytes: 0
-    # One frame of channel_count dummy words (free-running counter; low 16 bits are the sample).
-    - name: DATA_FRAME
-      value: 0x0056
-      dir: fpga_to_host
-      payload_bytes: variable
+    msg_types: []
   verification:
     cocotb_tests:
     - test/tb/test_axon_test_source.py

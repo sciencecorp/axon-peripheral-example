@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-// axon_test_source_tb
+// Shared SDK testbench template for axon_test_source
 // ----------------------
 // Flat-AXI testbench wrapper for the axon_test_source_peripheral_top peripheral DUT.
 //
