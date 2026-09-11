@@ -93,7 +93,7 @@ RUN set -eux; \
 # with sdk/*.deb local override for unreleased SDKs (same pattern as
 # driver.Dockerfile). When sdk/ has a .deb the apt repo isn't touched, so
 # unpublished or pre-release builds don't require a working repo.
-ARG AXON_SDK_VERSION=1.0.6-1~jammy
+ARG AXON_SDK_VERSION=1.0.8-1~jammy
 COPY keys/axonprobes-repo-science-public.asc /usr/share/keyrings/axonprobes-repo-science-public.asc
 COPY sdk/ /tmp/sdk-staging/
 USER root
