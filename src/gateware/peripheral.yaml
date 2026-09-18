@@ -4,7 +4,7 @@ project:
   name: gateware
   description: ''
 build:
-  radiant_version: '2024.2'
+  radiant_version: '2026.1'
 peripherals:
 - name: axon_test_source
   type: record
