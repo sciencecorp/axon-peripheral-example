@@ -3,12 +3,14 @@ ARG TARGETPLATFORM
 FROM ubuntu:22.04
 
 ARG TARGETPLATFORM
-ARG RADIANT_VERSION=2024.2
-# Bump this ARG when Lattice ships a new 2024.2.x build; do not edit RUN steps.
-# Pinned against electronics-infra/install_radiant.sh (RADIANT_VERSION=2024.2.0.3.4_Radiant_lin)
+ARG RADIANT_VERSION=2026.1
+# Bump this ARG when Lattice ships a new 2026.1.x build; do not edit RUN steps.
+# Pinned against electronics-infra/install_radiant.sh (RADIANT_VERSION=2026.1.0.37.0_Radiant_lin)
 # and verified via HTTP 200 from
-# https://files.latticesemi.com/Radiant/2024.2/2024.2.0.3.4_Radiant_lin.zip
-ARG RADIANT_BUILD=2024.2.0.3.4
+# https://files.latticesemi.com/Radiant/2026.1/2026.1.0.37.0_Radiant_lin.zip
+# The SDK's nerv512u-devkit seed is generated with Radiant 2026.1 (its Nucleus
+# SoC declares minRadiantVersion 2026.1), so 2024.x can no longer open it.
+ARG RADIANT_BUILD=2026.1.0.37.0
 ARG HOST_UID=1000
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -16,7 +18,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
     LANGUAGE=en_US:en \
     LC_ALL=en_US.UTF-8 \
-    RADIANT_DIR=/opt/lattice/radiant/2024.2
+    RADIANT_DIR=/opt/lattice/radiant/2026.1
 # LM_LICENSE_FILE is intentionally NOT baked in: the Radiant license is
 # supplied from outside at runtime (synapsectl forwards the host's
 # LM_LICENSE_FILE via -e, and bind-mounts a file license to
