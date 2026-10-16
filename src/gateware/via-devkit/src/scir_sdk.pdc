@@ -26,16 +26,14 @@ ldc_set_vcc -bank 5 1.8
 ldc_set_location -site {16} [get_ports ext_xo_i]
 ldc_set_port -iobuf {TERMINATION=OFF IO_TYPE=LVCMOS18H} [get_ports ext_xo_i]
 ldc_set_location -site {11} [get_ports ir_txa_o]
-ldc_set_location -site {43} [get_ports ir_txb_o]
 ldc_set_port -iobuf {IO_TYPE=LVDS DRIVE=NA SLEWRATE=NA} [get_ports ir_txa_o]
-ldc_set_port -iobuf {IO_TYPE=LVCMOS18 DRIVE=8 SLEWRATE=MED} [get_ports ir_txb_o]
 
 # nRF SPI bridge + IRQ
 ldc_set_location -site {58} [get_ports nrf_sclk_i]
 ldc_set_location -site {60} [get_ports nrf_mosi_i]
 ldc_set_location -site {19} [get_ports nrf_csn_i]
 ldc_set_location -site {20} [get_ports nrf_miso_o]
-ldc_set_location -site {E2} [get_ports nrf_irq_o]
+ldc_set_location -site {43} [get_ports nrf_irq_o]
 ldc_set_port -iobuf {PULLMODE=NONE IO_TYPE=LVCMOS18} [get_ports nrf_sclk_i]
 ldc_set_attribute {USE_PRIMARY=FALSE} [get_nets nrf_sclk_i_c]
 ldc_set_port -iobuf {PULLMODE=NONE IO_TYPE=LVCMOS18} [get_ports nrf_mosi_i]

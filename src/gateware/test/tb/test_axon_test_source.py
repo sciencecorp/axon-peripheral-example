@@ -32,6 +32,10 @@ from axon_peripheral_sdk.sim.cocotb_runner import cocotb_pytest_runner
 from axon_peripheral_sdk.sim.frames import generate_packet, parse_packet
 
 
+# 80 MHz — nerv512u-devkit's clkmc. via-devkit runs clkmc at 40 MHz, but the
+# peripheral is fully synchronous and every assertion below counts cycles
+# rather than nanoseconds, so this value is cosmetic and the suite is shared
+# unchanged across both target profiles.
 CLK_PERIOD_NS = 12.5
 
 # Message-type opcodes — must match axon_test_source_peripheral.sv.
@@ -204,7 +208,11 @@ async def test_no_stream_before_start(dut) -> None:
     assert sink.empty(), "DATA_FRAME received before START_STREAM"
 
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# src/gateware/ — the shared root above the per-profile project dirs
+# (via-devkit/, nerv512u-devkit/). The peripheral RTL and this testbench are
+# profile-agnostic and live here once; only the generated top/seed/transport
+# files differ per profile, and the sim never compiles those.
+_GATEWARE_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 @pytest.mark.parametrize(
@@ -227,8 +235,8 @@ def test_runner(testcase: str) -> None:
         # SDK framework SV (axi4_stream_interface) the peripheral + tb ports
         # bind to — resolved from the repo (dev) or the staged .deb assets.
         *framework_sv_sources(),
-        os.path.join(_PROJECT_ROOT, "src/axon_test_source_peripheral.sv"),
-        os.path.join(_PROJECT_ROOT, "test", "tb", "axon_test_source_tb.sv"),
+        os.path.join(_GATEWARE_ROOT, "axon_test_source_peripheral.sv"),
+        os.path.join(_GATEWARE_ROOT, "test", "tb", "axon_test_source_tb.sv"),
     ]
     cocotb_pytest_runner(
         sources=sources,

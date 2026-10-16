@@ -18,3 +18,7 @@ test.h5/
 
 # Superpowers brainstorming/spec scratch — local only.
 docs/superpowers/
+
+# Radiant/Diamond scratch dropped in whatever directory radiantc was invoked from.
+radiantc.log.*
+radiantc.tcl.*
