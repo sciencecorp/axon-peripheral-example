@@ -32,5 +32,6 @@ __pycache__/
 *.pyo
 
 # Cocotb sim artifacts
+sim_build/
 sim_build_*/
 **/results.xml
