@@ -195,6 +195,51 @@ Frame format on `rx_axis` / `tx_axis`:
 Your peripheral sees only the header and payload. The SDK handles the framing
 above and below it.
 
+### Test-source recording boundaries
+
+Both `via-devkit/peripheral.yaml` and `nerv512u-devkit/peripheral.yaml` declare
+this protocol. Change both declarations and every caller together; there is no
+zero-payload START/STOP compatibility path. Deploy a matching driver/bitstream
+revision and profile, not one new half paired with an old half.
+
+| Direction | Message | Payload |
+| --- | --- | --- |
+| Host → FPGA | CONFIGURE `0x0052` | `[channel_count, sample_period]`, exactly 8 bytes |
+| Host → FPGA | START_STREAM `0x0054` | `[nonce_low32, nonce_high32]`, exactly 8 bytes |
+| Host → FPGA | STOP_STREAM `0x0055` | The same nonce, low32 then high32, exactly 8 bytes |
+| FPGA → host | DATA_FRAME `0x0056`, samples | `channel_count` zero-extended 16-bit sample words |
+| FPGA → host | DATA_FRAME `0x0056`, BEGIN | `[0xA57A0001, nonce_low32, nonce_high32]`, exactly 12 bytes |
+| FPGA → host | DATA_FRAME `0x0056`, END | `[0xA57A0002, nonce_low32, nonce_high32]`, exactly 12 bytes |
+
+All words are 32-bit and little-endian. For example, START and STOP callers send
+`{nonce_low32, nonce_high32}`, never an empty payload. The first sample word is
+at most `0xffff`, so marker magic is disjoint from DATA for every channel count
+from 1 through 256, even when three sample words have the same length as a marker.
+
+A valid START freezes the epoch nonce and sends BEGIN through the same TX lane
+and SDK encapsulation path as DATA. BEGIN's final beat must handshake before any
+new DATA frame is admitted. A complete matching STOP inhibits new admission,
+finishes every already-admitted frame, and then sends END. No DATA follows END
+until a new valid START. An admitted frame retains its configuration, and every
+offered DATA/marker beat and its sidebands remain stable until accepted.
+
+Repeated same-nonce commands do not emit another boundary or restart a waveform.
+Conflicting START/CONFIGURE and wrong-nonce STOP cannot replace an active or
+pending epoch. A matching STOP while BEGIN is pending produces BEGIN then END
+without DATA between them. Malformed/truncated commands do not create successful
+boundaries; reset or disconnect invalidates a recording rather than completing it.
+
+The driver skips markers on the existing recording reader. Its BEGIN callback
+can validate exactly three exposed words and the nonce, but cannot detect hidden
+13–15-byte payload tails that expose those same three words. Stop's protected
+raw receive additionally requires exactly `sizeof(axon::RxMsgHeader) + 12` bytes,
+the DATA message type, hardware source address, magic, and current nonce, with
+BEGIN already observed within its original five-second deadline. Missing or
+invalid boundaries fail; see the root README for ownership and deadline limits.
+
+These are ordered source boundaries, not proof of CRC validation, universal
+sample contents, downstream queues being empty, or successful host RPC Stop.
+
 ## Constraints
 
 Each project has a `.pdc` for pins and a `.sdc` for timing, and both are split

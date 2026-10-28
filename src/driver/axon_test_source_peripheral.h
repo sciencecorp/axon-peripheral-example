@@ -1,9 +1,11 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "api/channel.pb.h"
@@ -23,7 +25,8 @@ class AxonTestSourcePeripheral
     : public scifi::plugin::RecordPluginWithLimits<AxonTestSourcePeripheral> {
  public:
   SCIFI_RECORD_PLUGIN_LIMITS(MAX_SAMPLE_RATE, MAX_BIT_WIDTH, MAX_GAIN, MAX_CHANNEL_COUNT);
-  using RecordPluginWithLimits::RecordPluginWithLimits;
+  AxonTestSourcePeripheral(uint32_t id, uint32_t hw_addr, zmq::context_t& ctx,
+                           std::string_view tx_endpoint, std::string_view rx_endpoint);
 
   [[nodiscard]] synapse::Peripheral to_proto() const override;
   [[nodiscard]] synapse::QueryResponse self_test(const synapse::SelfTestQuery&) override;
@@ -47,6 +50,18 @@ class AxonTestSourcePeripheral
       const std::vector<synapse::Channel>& channels) override;
 
  private:
+  void fail_recording(scifi::Status status);
+  void release_data_subscription();
+  scifi::Status finish_recording(scifi::Status status);
+
+  const uint32_t hw_addr_;
+  uint64_t recording_nonce_ = 0;
+  std::chrono::steady_clock::time_point begin_deadline_{};
+  scifi::Status primary_failure_ = scifi::Status::OK;
+  bool start_submitted_ = false;
+  bool begin_seen_ = false;
+  bool data_subscription_owned_ = false;
+  bool subscription_cleanup_attempted_ = false;
   uint32_t channels_enabled_ = 0;
   uint16_t frame_buffer_[MAX_CHANNEL_COUNT] = {};  // scratch for parse_frame_payload
 };

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20.1)
-project(scifi-peripheral-example VERSION 0.1.0)
+project(scifi-peripheral-example VERSION 0.2.0)
 
 option(BUILD_FOR_ARM64 "Build for ARM64 architecture" OFF)
 

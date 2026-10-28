@@ -25,17 +25,19 @@ peripherals:
       value: 0x0052
       dir: host_to_fpga
       payload_bytes: 8
-    # Begin streaming DATA_FRAME packets.
+    # Start an epoch: exactly 8 bytes, nonce low32 then high32; BEGIN precedes samples.
     - name: START_STREAM
       value: 0x0054
       dir: host_to_fpga
-      payload_bytes: 0
-    # Stop streaming.
+      payload_bytes: 8
+    # Stop the matching nonce (low32, high32); END follows every admitted DATA frame.
     - name: STOP_STREAM
       value: 0x0055
       dir: host_to_fpga
-      payload_bytes: 0
-    # One frame of channel_count dummy words (free-running counter; low 16 bits are the sample).
+      payload_bytes: 8
+    # Samples: channel_count zero-extended 16-bit words (LFP + spikes).
+    # Markers: exactly 12 bytes [magic, nonce low32, nonce high32], on the same DATA lane.
+    # BEGIN magic = 0xA57A0001; END magic = 0xA57A0002; neither is a sample word.
     - name: DATA_FRAME
       value: 0x0056
       dir: fpga_to_host
