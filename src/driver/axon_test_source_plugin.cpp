@@ -7,12 +7,11 @@
 
 #include <cstddef>
 
+#include "axon_test_source_peripheral.h"
 #include "scifi-peripheral-sdk/plugin.h"
 
-#include "axon_test_source_peripheral.h"
-
 SCIFI_REGISTER_PERIPHERAL(
-    axon_test_source::AxonTestSourcePeripheral,             // Class you implement
-    "axon_test_source",                                     // Name shown in device logs
-    "0.1.0",                                                // Plugin .deb package version
+    axon_test_source::AxonTestSourcePeripheral,  // Class you implement
+    "axon_test_source",                          // Name shown in device logs
+    "0.2.0",                                     // Plugin .deb package version
     static_cast<uint32_t>(0xF001));  // Peripheral ID (user-assignable window 0xF001..0xFFFE)

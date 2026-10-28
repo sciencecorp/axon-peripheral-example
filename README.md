@@ -21,8 +21,11 @@ synapsectl -u "your-device-identifier" peripherals deploy both . --profile nerv5
 `dist/`. `deploy` installs them on the device. Building the bitstream runs
 Lattice Radiant, so you need `LM_LICENSE_FILE` set; the driver half doesn't.
 
-Both halves are optional. Use `driver` or `gateware` in place of `both` to
-build just one.
+You can build one half by using `driver` or `gateware` in place of `both`.
+For recording, deploy a matching driver and bitstream from the same revision
+and target profile. Example 0.2.0 uses nonce-bearing START/STOP and is incompatible
+with the 0.1.0 zero-payload protocol; updating only one half does not make a
+matched pair.
 
 ## Target profiles
 
@@ -48,6 +51,43 @@ two boards clock at different rates, so a driver built for the wrong profile
 produces the wrong sample rate.
 
 You can set `SYNAPSE_GATEWARE_PROFILE` instead of passing the flag each time.
+
+## Recording boundaries
+
+Each Start generates a fresh, nonzero 64-bit nonce from OS entropy; entropy
+failure fails Start rather than reusing a nonce. Start configures the source,
+subscribes to its existing DATA channel, and submits START with that nonce. Its
+OK result means command submission, not receipt of the hardware BEGIN marker.
+It performs no receive or queue drain on the control thread.
+
+The recording reader consumes BEGIN before delivering this epoch's samples.
+BEGIN and END use the same DATA packet lane as samples, with reserved first
+words outside the zero-extended 16-bit sample range. They never become samples,
+including with three channels, where marker and sample payload lengths match.
+The full wire contract is in [the gateware README](src/gateware/README.md#test-source-recording-boundaries).
+
+Stop sends the same nonce and consumes the existing DATA FIFO through the
+matching END from the hardware source address. END follows all admitted source
+frames, including a frame stalled when STOP arrived. Silence, reset, disconnect,
+and an SDK Idle no-op Stop are not evidence of completion.
+
+BEGIN has one absolute five-second deadline from START submission, checked even
+under continuous old DATA and again when Stop enters without parser callbacks.
+A protocol failure releases the owned subscription on the reader and latches
+the first error for Stop; cleanup/send errors do not replace that error. Failed
+subscription cleanup does not establish a bounded reader join.
+
+Stop sets one five-second receipt deadline on entry, never extended by DATA.
+A marker processed after that deadline is rejected. The existing 500 ms blocking
+receive quantum permits the receive wait to return up to one quantum later
+(a 5.5-second RX-bound return, excluding scheduling), not a strict five-second
+whole-lifecycle/RPC bound. There is no quiet-gap completion or retry loop.
+
+The socket must pass sequentially from control-thread Start to the recording
+reader, which also owns Stop's receipt wait; a later Start follows reader join.
+This does not make concurrent Start/Stop/read safe or fix host middleware
+startup races or Stop-error propagation. The markers prove producer ordering,
+not CRC validation, every sample's contents, or downstream sink drain.
 
 ## What's in here
 

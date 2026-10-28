@@ -1,7 +1,7 @@
 {
   "name": "scifi-axon-test-source",
   "kind": "peripheral_plugin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "abi_version": 1,
   "description": "Axon test source — streams synthetic dummy data over the SDK data path",
   "peripheral_ids": [
